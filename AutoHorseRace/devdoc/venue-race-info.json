@@ -1,0 +1,43 @@
+{
+  "success": true,
+  "data": {
+    "username": "vcd888666",
+    "race_date": "09-08-2026",
+    "balance": "HK$500,510.16",
+    "default_rc": "7",
+    "available_races": [
+      {
+        "race_num": "7",
+        "time": "12:14pm - Race 7",
+        "is_current": true
+      },
+      {
+        "race_num": "8",
+        "time": "12:40pm - Race 8",
+        "is_current": false
+      },
+      {
+        "race_num": "9",
+        "time": "01:06pm - Race 9",
+        "is_current": false
+      },
+      {
+        "race_num": "10",
+        "time": "01:33pm - Race 10",
+        "is_current": false
+      },
+      {
+        "race_num": "11",
+        "time": "02:01pm - Race 11",
+        "is_current": false
+      },
+      {
+        "race_num": "12",
+        "time": "02:30pm - Race 12",
+        "is_current": false
+      }
+    ],
+    "race_time_info": " (12:14pm - Race 7)",
+    "ds_html": "<script>document.domain = 'ctb988.com';</script><meta http-equiv=refresh content=3><script>top.TaskHandler.stopPending(false);</script><pre id=AC_BAL>HK$500,510.16</pre><pre id=AC_PL>HK$518.32</pre><pre id=PT_FLAG>0</pre><pre id=nws>&lt;span class=RD_RD&gt;通告: 本星期结账的时间将延迟至 星期一 (10/08) 凌晨一点十分。&lt;/span&gt;\r\n&lt;span class=BL_BL&gt; 星期日 (09/08) 马来西亚 - 雪兰莪 (日马) 赛事第一场将在中午十二点四十五分开跑, &lt;/span&gt;\r\n&lt;span class=OR_OR&gt; 香港 - 海外 (霍珀加滕) (夜马) 赛事第一场将在傍晚六点五十分开跑, &lt;/span&gt;\r\n&lt;span class=CY_CY&gt; 香港 - 海外 (多維爾) (夜马) 赛事第一场将在晚上八点三十一分开跑 及 &lt;/span&gt;\r\n&lt;span class=YL_YL&gt; 南非 - 斯高维尔 (夜马) 赛事第一场将在傍晚六点零七分开跑。&lt;/span&gt;\r\n&lt;span class=NUT_NUT&gt; 由于场地状况恶劣，新加坡马会已宣布取消 今天 (09/08) 澳洲(马) - 混合赛  场2, 场4, 场6, 场8, 场10,场 12 及 场14 赛事。 所有已成交投注将退还。详情请查阅您的交易记录。                 \r\n</pre><pre id=nws2>&lt;span class=UK&gt; 星期日 (09/08) 英国(马) - 切普斯托 (场1至5) 及 萊斯特 (场2至5) (英国赔率) 赛事 及 &lt;/span&gt;\t\t\t\t\t\t\t\t\t\t\t\t\t\r\n&lt;span class=IR&gt; 爱尔兰(马) - 克拉 (场1至7) 及 唐帕里克 (场1至6) (爱尔兰赔率) 赛事将在星期日 (09/08) 下午五点三十分开放投注。&lt;/span&gt;\t\t\t\t\t\t\t\t\t\t\t\t\t</pre><pre id=nws3>&lt;span class=RD_RD&gt; 由于技术问题， 美国(马) - 萨拉托加(AM)  (08/08) 第11场赛事，所有在这段 (时间: 6:47:13am) 之后已成交的交易将被取消和退还。详情请查阅您的交易记录。 &lt;/span&gt;\r\n&lt;span class=NUT_NUT&gt; 由于场地状况恶劣， 澳洲(马) - 沃格 马会已宣布取消 (09/08) 赛事。所有已成交投注将退还。详情请查阅您的交易记录。                   \r\n&lt;span class=RD_RD&gt; 由于参赛狗不足， 澳洲(狗) - 甘比尔山 狗会已宣布取消  (09/08) 第1场赛事。所有已成交投注将退还。详情请查阅您的交易记录。                \r\n</pre><pre id=nwsByLoc>日本(競輪) 和歌山 场6.. 4-6-2-00 &lt;span class=RD_RD&gt;(成绩待定)&lt;/span&gt; </pre><pre id=nwsByLoc2>&lt;span class=NUT_NUT&gt;&lt;/span&gt;</pre><pre id=nwsByLoc3></pre><pre id=reultsMini>div#JP!type#396!r#6!hs#4,6,2!t#(Pending)!fc#4-6!pft#4-6,2-4,2-6!rd#09-08-2026!i18nTote#日本!dog#0!code#JP!mode#HK!cur#HK!lang#CH!country#和歌山!location#日本(競輪)!gameType#KEIRIN</pre><pre id=reultsMini2></pre><pre id=TRANS_DATA>[V#2#0]</pre><pre id=txtDate>星期日,8月9日</pre><pre id=txtTOTE>12:14pm - Race 7</pre><pre id=txtTIMER>17</pre><pre id=mrqNOTES>S組特选赛事 - 5圈 - 2025米 (12:13:30关盘时间) [贴士: 9-1-7-5]</pre><pre id=mrqNOTES2>CL S Special Selection - 5 Laps - 2025m (12:13:30 Closing Time) [TIPS:9-1-7-5]</pre><pre id=txtGOING>好地</pre><pre id=dataENCRYPT></pre><script>top.getTRANS();top.emc2();</script>"
+  }
+}

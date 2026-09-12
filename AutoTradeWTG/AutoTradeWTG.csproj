@@ -1,0 +1,659 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{99E80A9D-3B0B-4C4A-B073-1388210AF0E1}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>uClient.Broker</RootNamespace>
+    <AssemblyName>AutoTradeWTG</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <TargetFrameworkProfile />
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
+    <PublishUrl>publish\</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>true</MapFileExtensions>
+    <ApplicationRevision>0</ApplicationRevision>
+    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>1</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup>
+    <StartupObject>WTG.Broker.Program</StartupObject>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>LONGJIAO.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Client.cs" />
+    <Compile Include="MF4.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="TradeForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="TradeForm.Designer.cs">
+      <DependentUpon>TradeForm.cs</DependentUpon>
+    </Compile>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <EmbeddedResource Include="TradeForm.resx">
+      <DependentUpon>TradeForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <None Include="packages.config" />
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <BootstrapperPackage Include=".NETFramework,Version=v4.7.2">
+      <Visible>False</Visible>
+      <ProductName>Microsoft .NET Framework 4.7.2 %28x86 and x64%29</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="LONGJIAO.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <WCFMetadata Include="Connected Services\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Accessibility" />
+    <Reference Include="AsyncIO, Version=0.1.69.0, Culture=neutral, PublicKeyToken=44a94435bd6f33f8, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\AsyncIO.0.1.69\lib\net40\AsyncIO.dll</HintPath>
+    </Reference>
+    <Reference Include="AvalonWizard, Version=1.2.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\AvalonWizard.dll</HintPath>
+    </Reference>
+    <Reference Include="AvalonWizard.Mvvm, Version=1.2.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\AvalonWizard.Mvvm.dll</HintPath>
+    </Reference>
+    <Reference Include="BouncyCastle.Crypto, Version=1.8.1.0, Culture=neutral, PublicKeyToken=0e99375e54769942">
+      <HintPath>..\WindowsFormsApp2\packages\BouncyCastle.Crypto.dll.1.8.1\lib\BouncyCastle.Crypto.dll</HintPath>
+    </Reference>
+    <Reference Include="Caliburn.Micro, Version=2.0.2.0, Culture=neutral, PublicKeyToken=8e5891231f2ed21f, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\Caliburn.Micro.dll</HintPath>
+    </Reference>
+    <Reference Include="Caliburn.Micro.Platform, Version=2.0.2.0, Culture=neutral, PublicKeyToken=8e5891231f2ed21f, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\Caliburn.Micro.Platform.dll</HintPath>
+    </Reference>
+    <Reference Include="ClosedXML, Version=0.76.0.0, Culture=neutral, PublicKeyToken=fd1eb21b62ae805b, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\ClosedXML.dll</HintPath>
+    </Reference>
+    <Reference Include="DocumentFormat.OpenXml, Version=2.5.5631.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\DocumentFormat.OpenXml.dll</HintPath>
+    </Reference>
+    <Reference Include="FxServerAdapter, Version=1.0.1.2, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\FxServerAdapter.dll</HintPath>
+    </Reference>
+    <Reference Include="FxServerClient, Version=1.0.1.7, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\FxServerClient.dll</HintPath>
+    </Reference>
+    <Reference Include="FxServerCryptoCS, Version=1.0.1.2, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\FxServerCryptoCS.dll</HintPath>
+    </Reference>
+    <Reference Include="GalaSoft.MvvmLight, Version=5.1.1.35051, Culture=neutral, PublicKeyToken=0e453835af4ee6ce, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\GalaSoft.MvvmLight.dll</HintPath>
+    </Reference>
+    <Reference Include="GalaSoft.MvvmLight.Extras, Version=5.1.1.35049, Culture=neutral, PublicKeyToken=f46ff315b1088208, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\GalaSoft.MvvmLight.Extras.dll</HintPath>
+    </Reference>
+    <Reference Include="ICSharpCode.AvalonEdit, Version=4.3.1.9429, Culture=neutral, PublicKeyToken=9cc39be672370310, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\ICSharpCode.AvalonEdit.dll</HintPath>
+    </Reference>
+    <Reference Include="ICSharpCode.NRefactory, Version=5.0.0.0, Culture=neutral, PublicKeyToken=d4bfe873e7598c49, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\ICSharpCode.NRefactory.dll</HintPath>
+    </Reference>
+    <Reference Include="ICSharpCode.NRefactory.CSharp, Version=5.0.0.0, Culture=neutral, PublicKeyToken=d4bfe873e7598c49, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\ICSharpCode.NRefactory.CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="ICSharpCode.NRefactory.Xml, Version=5.0.0.0, Culture=neutral, PublicKeyToken=d4bfe873e7598c49, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\ICSharpCode.NRefactory.Xml.dll</HintPath>
+    </Reference>
+    <Reference Include="ICSharpCode.SharpZipLib, Version=0.86.0.518, Culture=neutral, PublicKeyToken=1b03e6acf1164f73, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\ICSharpCode.SharpZipLib.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.AlertManager, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.AlertManager.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.Chart, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.Chart.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.CodeBuilder, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.CodeBuilder.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.CodeGenerator, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.CodeGenerator.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.CodeManager, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.CodeManager.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.CollectionEditor, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.CollectionEditor.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.Common, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.Core, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.DataFeed, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.DataFeed.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.DataServer, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.DataServer.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.FxBroker, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.FxBroker.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.GlobalManager, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.GlobalManager.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.IBroker, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.IBroker.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.Interfaces, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.Interfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.MVVM, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.MVVM.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.StockChartX, Version=2.4.15.257, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.StockChartX.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.TASDK, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.TASDK.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.UserCode, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.UserCode.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.ViewModelInterfaces, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.ViewModelInterfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.ViewModels, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.ViewModels.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.Views, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.Views.dll</HintPath>
+    </Reference>
+    <Reference Include="mFinance.Chart, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\mFinance.Chart.dll</HintPath>
+    </Reference>
+    <Reference Include="mFinance.Common, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\mFinance.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="mFinance.Languages, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\mFinance.Languages.dll</HintPath>
+    </Reference>
+    <Reference Include="mFinance.Net, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\mFinance.Net.dll</HintPath>
+    </Reference>
+    <Reference Include="mFinance.Settings, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\mFinance.Settings.dll</HintPath>
+    </Reference>
+    <Reference Include="mFinanceModels, Version=1.0.1.2, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\mFinanceModels.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Bcl.AsyncInterfaces, Version=9.0.0.6, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\Microsoft.Bcl.AsyncInterfaces.9.0.6\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="Microsoft.Practices.ServiceLocation, Version=1.3.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\Microsoft.Practices.ServiceLocation.dll</HintPath>
+    </Reference>
+    <Reference Include="Modulus.License, Version=1.0.0.0, Culture=neutral, PublicKeyToken=e2031b08182ae40e, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\Modulus.License.dll</HintPath>
+    </Reference>
+    <Reference Include="Mono.Cecil, Version=0.9.6.0, Culture=neutral, PublicKeyToken=0738eb9f132ed756, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\Mono.Cecil.dll</HintPath>
+    </Reference>
+    <Reference Include="Mono.Cecil.Mdb, Version=0.9.6.0, Culture=neutral, PublicKeyToken=0738eb9f132ed756, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\Mono.Cecil.Mdb.dll</HintPath>
+    </Reference>
+    <Reference Include="Mono.Cecil.Pdb, Version=0.9.6.0, Culture=neutral, PublicKeyToken=0738eb9f132ed756, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\Mono.Cecil.Pdb.dll</HintPath>
+    </Reference>
+    <Reference Include="Mono.Cecil.Rocks, Version=0.9.6.0, Culture=neutral, PublicKeyToken=0738eb9f132ed756, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\Mono.Cecil.Rocks.dll</HintPath>
+    </Reference>
+    <Reference Include="NaCl, Version=0.1.13.0, Culture=neutral, PublicKeyToken=827c20e50a9775fa, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\NaCl.Net.0.1.13\lib\net472\NaCl.dll</HintPath>
+    </Reference>
+    <Reference Include="NetMQ, Version=4.0.2.2, Culture=neutral, PublicKeyToken=a6decef4ddc58b3a, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\NetMQ.4.0.2.2\lib\net472\NetMQ.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\Newtonsoft.Json.13.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="NLog, Version=5.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\NLog.5.3.4\lib\net46\NLog.dll</HintPath>
+    </Reference>
+    <Reference Include="protobuf-net, Version=2.0.0.668, Culture=neutral, PublicKeyToken=257b51d87d2e4d67, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\protobuf-net.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Buffers, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\System.Buffers.4.6.1\lib\net462\System.Buffers.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Configuration" />
+    <Reference Include="System.Deployment" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.Memory, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\System.Memory.4.6.3\lib\net462\System.Memory.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Net.Http.WebRequest" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Numerics.Vectors, Version=4.1.6.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\System.Numerics.Vectors.4.6.1\lib\net462\System.Numerics.Vectors.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe, Version=6.0.3.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\System.Runtime.CompilerServices.Unsafe.6.1.2\lib\net462\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+    </Reference>
+    <Reference Include="System.ServiceModel" />
+    <Reference Include="System.Threading.Tasks.Extensions, Version=4.2.4.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\System.Threading.Tasks.Extensions.4.6.3\lib\net462\System.Threading.Tasks.Extensions.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Transactions" />
+    <Reference Include="System.ValueTuple, Version=4.0.3.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\System.ValueTuple.4.5.0\lib\net47\System.ValueTuple.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Windows.Interactivity, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\System.Windows.Interactivity.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Xaml" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="WriteableBitmapEx.Wpf, Version=1.5.0.0, Culture=neutral, PublicKeyToken=50375ca6144f1c69, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\WriteableBitmapEx.Wpf.dll</HintPath>
+    </Reference>
+    <Reference Include="WTG_mF4, Version=1.0.0.1040, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mF4Packages\WTG\WTG_mF4.exe</HintPath>
+    </Reference>
+    <Reference Include="Xceed.Wpf.AvalonDock">
+      <HintPath>..\uClient\mF4Packages\WTG\Xceed.Wpf.AvalonDock.dll</HintPath>
+    </Reference>
+    <Reference Include="Xceed.Wpf.AvalonDock.Themes.Aero">
+      <HintPath>..\uClient\mF4Packages\WTG\Xceed.Wpf.AvalonDock.Themes.Aero.dll</HintPath>
+    </Reference>
+    <Reference Include="Xceed.Wpf.AvalonDock.Themes.Metro">
+      <HintPath>..\uClient\mF4Packages\WTG\Xceed.Wpf.AvalonDock.Themes.Metro.dll</HintPath>
+    </Reference>
+    <Reference Include="Xceed.Wpf.AvalonDock.Themes.VS2010">
+      <HintPath>..\uClient\mF4Packages\WTG\Xceed.Wpf.AvalonDock.Themes.VS2010.dll</HintPath>
+    </Reference>
+    <Reference Include="Xceed.Wpf.DataGrid">
+      <HintPath>..\uClient\mF4Packages\WTG\Xceed.Wpf.DataGrid.dll</HintPath>
+    </Reference>
+    <Reference Include="Xceed.Wpf.Toolkit">
+      <HintPath>..\uClient\mF4Packages\WTG\Xceed.Wpf.Toolkit.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <NativeReference Include="AvalonWizard, Version=1.2.0.0, ProcessorArchitecture=msil">
+      <Name>AvalonWizard.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\AvalonWizard.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="AvalonWizard.Mvvm, Version=1.2.0.0, ProcessorArchitecture=msil">
+      <Name>AvalonWizard.Mvvm.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\AvalonWizard.Mvvm.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Caliburn.Micro, Version=2.0.2.0, PublicKeyToken=8E5891231F2ED21F, ProcessorArchitecture=msil">
+      <Name>Caliburn.Micro.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Caliburn.Micro.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Caliburn.Micro.Platform, Version=2.0.2.0, PublicKeyToken=8E5891231F2ED21F, ProcessorArchitecture=msil">
+      <Name>Caliburn.Micro.Platform.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Caliburn.Micro.Platform.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="ClosedXML, Version=0.76.0.0, PublicKeyToken=FD1EB21B62AE805B, ProcessorArchitecture=msil">
+      <Name>ClosedXML.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\ClosedXML.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="DocumentFormat.OpenXml, Version=2.5.5631.0, PublicKeyToken=31BF3856AD364E35, ProcessorArchitecture=msil">
+      <Name>DocumentFormat.OpenXml.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\DocumentFormat.OpenXml.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="FxServerAdapter, Version=1.0.1.2, ProcessorArchitecture=msil">
+      <Name>FxServerAdapter.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\FxServerAdapter.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="FxServerClient, Version=1.0.1.7, ProcessorArchitecture=msil">
+      <Name>FxServerClient.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\FxServerClient.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="FxServerCryptoCS, Version=1.0.1.2, ProcessorArchitecture=msil">
+      <Name>FxServerCryptoCS.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\FxServerCryptoCS.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="GalaSoft.MvvmLight, Version=5.1.1.35051, PublicKeyToken=0E453835AF4EE6CE, ProcessorArchitecture=msil">
+      <Name>GalaSoft.MvvmLight.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\GalaSoft.MvvmLight.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="GalaSoft.MvvmLight.Extras, Version=5.1.1.35049, PublicKeyToken=F46FF315B1088208, ProcessorArchitecture=msil">
+      <Name>GalaSoft.MvvmLight.Extras.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\GalaSoft.MvvmLight.Extras.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="ICSharpCode.AvalonEdit, Version=4.3.1.9429, PublicKeyToken=9CC39BE672370310, ProcessorArchitecture=msil">
+      <Name>ICSharpCode.AvalonEdit.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\ICSharpCode.AvalonEdit.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="ICSharpCode.NRefactory, Version=5.0.0.0, PublicKeyToken=D4BFE873E7598C49, ProcessorArchitecture=msil">
+      <Name>ICSharpCode.NRefactory.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\ICSharpCode.NRefactory.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="ICSharpCode.NRefactory.CSharp, Version=5.0.0.0, PublicKeyToken=D4BFE873E7598C49, ProcessorArchitecture=msil">
+      <Name>ICSharpCode.NRefactory.CSharp.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\ICSharpCode.NRefactory.CSharp.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="ICSharpCode.NRefactory.Xml, Version=5.0.0.0, PublicKeyToken=D4BFE873E7598C49, ProcessorArchitecture=msil">
+      <Name>ICSharpCode.NRefactory.Xml.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\ICSharpCode.NRefactory.Xml.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="ICSharpCode.SharpZipLib, Version=0.86.0.518, PublicKeyToken=1B03E6ACF1164F73, ProcessorArchitecture=msil">
+      <Name>ICSharpCode.SharpZipLib.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\ICSharpCode.SharpZipLib.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.AlertManager, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.AlertManager.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.AlertManager.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.Chart, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.Chart.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.Chart.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.CodeBuilder, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.CodeBuilder.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.CodeBuilder.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.CodeGenerator, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.CodeGenerator.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.CodeGenerator.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.CodeManager, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.CodeManager.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.CodeManager.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.CollectionEditor, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.CollectionEditor.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.CollectionEditor.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.Common, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.Common.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.Common.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.Core, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.Core.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.Core.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.DataFeed, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.DataFeed.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.DataFeed.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.DataServer, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.DataServer.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.DataServer.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.FxBroker, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.FxBroker.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.FxBroker.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.GlobalManager, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.GlobalManager.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.GlobalManager.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.IBroker, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.IBroker.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.IBroker.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.Interfaces, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.Interfaces.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.Interfaces.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.MVVM, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.MVVM.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.MVVM.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.StockChartX, Version=2.4.15.257, ProcessorArchitecture=msil">
+      <Name>M4.StockChartX.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.StockChartX.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.TASDK, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.TASDK.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.TASDK.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.UserCode, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.UserCode.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.UserCode.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.ViewModelInterfaces, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.ViewModelInterfaces.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.ViewModelInterfaces.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.ViewModels, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.ViewModels.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.ViewModels.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="M4.Views, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>M4.Views.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\M4.Views.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="mFinance.Chart, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>mFinance.Chart.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\mFinance.Chart.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="mFinance.Common, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>mFinance.Common.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\mFinance.Common.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="mFinance.Languages, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>mFinance.Languages.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\mFinance.Languages.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="mFinance.Net, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>mFinance.Net.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\mFinance.Net.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="mFinance.Settings, Version=1.0.0.0, ProcessorArchitecture=msil">
+      <Name>mFinance.Settings.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\mFinance.Settings.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="mFinanceModels, Version=1.0.1.2, ProcessorArchitecture=msil">
+      <Name>mFinanceModels.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\mFinanceModels.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Microsoft.Practices.ServiceLocation, Version=1.3.0.0, PublicKeyToken=31BF3856AD364E35, ProcessorArchitecture=msil">
+      <Name>Microsoft.Practices.ServiceLocation.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Microsoft.Practices.ServiceLocation.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Modulus.License, Version=1.0.0.0, PublicKeyToken=E2031B08182AE40E, ProcessorArchitecture=msil">
+      <Name>Modulus.License.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Modulus.License.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Mono.Cecil, Version=0.9.6.0, PublicKeyToken=0738EB9F132ED756, ProcessorArchitecture=msil">
+      <Name>Mono.Cecil.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Mono.Cecil.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Mono.Cecil.Mdb, Version=0.9.6.0, PublicKeyToken=0738EB9F132ED756, ProcessorArchitecture=msil">
+      <Name>Mono.Cecil.Mdb.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Mono.Cecil.Mdb.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Mono.Cecil.Pdb, Version=0.9.6.0, PublicKeyToken=0738EB9F132ED756, ProcessorArchitecture=msil">
+      <Name>Mono.Cecil.Pdb.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Mono.Cecil.Pdb.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Mono.Cecil.Rocks, Version=0.9.6.0, PublicKeyToken=0738EB9F132ED756, ProcessorArchitecture=msil">
+      <Name>Mono.Cecil.Rocks.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Mono.Cecil.Rocks.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="NLog, Version=4.0.0.0, PublicKeyToken=5120E14C03D0593C, ProcessorArchitecture=msil">
+      <Name>NLog.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\NLog.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="protobuf-net, Version=2.0.0.668, PublicKeyToken=257B51D87D2E4D67, ProcessorArchitecture=msil">
+      <Name>protobuf-net.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\protobuf-net.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="System.Windows.Interactivity, Version=4.0.0.0, PublicKeyToken=31BF3856AD364E35, ProcessorArchitecture=msil">
+      <Name>System.Windows.Interactivity.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\System.Windows.Interactivity.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="WriteableBitmapEx.Wpf, Version=1.5.0.0, PublicKeyToken=50375CA6144F1C69, ProcessorArchitecture=msil">
+      <Name>WriteableBitmapEx.Wpf.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\WriteableBitmapEx.Wpf.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="WTG_mF4, Version=1.0.0.1040, ProcessorArchitecture=msil">
+      <Name>WTG_mF4.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\WTG_mF4.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Xceed.Wpf.AvalonDock, Version=2.2.0.0, PublicKeyToken=3E4669D2F30244F4, ProcessorArchitecture=msil">
+      <Name>Xceed.Wpf.AvalonDock.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Xceed.Wpf.AvalonDock.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Xceed.Wpf.AvalonDock.Themes.Aero, Version=2.2.0.0, PublicKeyToken=3E4669D2F30244F4, ProcessorArchitecture=msil">
+      <Name>Xceed.Wpf.AvalonDock.Themes.Aero.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Xceed.Wpf.AvalonDock.Themes.Aero.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Xceed.Wpf.AvalonDock.Themes.Metro, Version=2.2.0.0, PublicKeyToken=3E4669D2F30244F4, ProcessorArchitecture=msil">
+      <Name>Xceed.Wpf.AvalonDock.Themes.Metro.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Xceed.Wpf.AvalonDock.Themes.Metro.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Xceed.Wpf.AvalonDock.Themes.VS2010, Version=2.2.0.0, PublicKeyToken=3E4669D2F30244F4, ProcessorArchitecture=msil">
+      <Name>Xceed.Wpf.AvalonDock.Themes.VS2010.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Xceed.Wpf.AvalonDock.Themes.VS2010.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Xceed.Wpf.DataGrid, Version=2.2.0.0, PublicKeyToken=3E4669D2F30244F4, ProcessorArchitecture=msil">
+      <Name>Xceed.Wpf.DataGrid.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Xceed.Wpf.DataGrid.manifest</HintPath>
+    </NativeReference>
+    <NativeReference Include="Xceed.Wpf.Toolkit, Version=2.2.0.0, PublicKeyToken=3E4669D2F30244F4, ProcessorArchitecture=msil">
+      <Name>Xceed.Wpf.Toolkit.manifest</Name>
+      <HintPath>..\uClient\mF4Packages\WTG\Xceed.Wpf.Toolkit.manifest</HintPath>
+    </NativeReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\uClient\AutoTrade.csproj">
+      <Project>{fdff1a5c-8941-44ba-a051-0949b06420e5}</Project>
+      <Name>AutoTrade</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\WindowsFormsApp2\packages\Microsoft.Bcl.Build.1.0.21\build\Microsoft.Bcl.Build.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\WindowsFormsApp2\packages\Microsoft.Bcl.Build.1.0.21\build\Microsoft.Bcl.Build.targets'))" />
+    <Error Condition="!Exists('..\WindowsFormsApp2\packages\Microsoft.Bcl.Build.1.0.21\build\Microsoft.Bcl.Build.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\WindowsFormsApp2\packages\Microsoft.Bcl.Build.1.0.21\build\Microsoft.Bcl.Build.targets'))" />
+  </Target>
+  <Import Project="..\WindowsFormsApp2\packages\Microsoft.Bcl.Build.1.0.21\build\Microsoft.Bcl.Build.targets" Condition="Exists('..\WindowsFormsApp2\packages\Microsoft.Bcl.Build.1.0.21\build\Microsoft.Bcl.Build.targets')" />
+</Project>

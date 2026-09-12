@@ -1,0 +1,527 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\AutoTradeEA\packages\EntityFramework.6.4.4\build\EntityFramework.props" Condition="Exists('..\AutoTradeEA\packages\EntityFramework.6.4.4\build\EntityFramework.props')" />
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{AA2E48B7-7FC0-4599-9CC6-9D82C950BA72}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Horse.Broker</RootNamespace>
+    <AssemblyName>AutoTradeHorse</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <PublishUrl>publish\</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>true</MapFileExtensions>
+    <ApplicationRevision>0</ApplicationRevision>
+    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>0</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>LONGJIAO.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="AlibabaCloud.EndpointUtil, Version=0.1.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\AlibabaCloud.EndpointUtil.0.1.1\lib\net45\AlibabaCloud.EndpointUtil.dll</HintPath>
+    </Reference>
+    <Reference Include="AlibabaCloud.GatewaySpi, Version=0.0.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\AlibabaCloud.GatewaySpi.0.0.2\lib\net45\AlibabaCloud.GatewaySpi.dll</HintPath>
+    </Reference>
+    <Reference Include="AlibabaCloud.OpenApiClient, Version=0.1.5.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\AlibabaCloud.OpenApiClient.0.1.6\lib\net45\AlibabaCloud.OpenApiClient.dll</HintPath>
+    </Reference>
+    <Reference Include="AlibabaCloud.OpenApiUtil, Version=1.1.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\AlibabaCloud.OpenApiUtil.1.1.1\lib\net45\AlibabaCloud.OpenApiUtil.dll</HintPath>
+    </Reference>
+    <Reference Include="AlibabaCloud.SDK.Dysmsapi20170525, Version=2.0.22.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\AlibabaCloud.SDK.Dysmsapi20170525.2.0.23\lib\net45\AlibabaCloud.SDK.Dysmsapi20170525.dll</HintPath>
+    </Reference>
+    <Reference Include="AlibabaCloud.TeaUtil, Version=0.1.14.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\AlibabaCloud.TeaUtil.0.1.15\lib\net45\AlibabaCloud.TeaUtil.dll</HintPath>
+    </Reference>
+    <Reference Include="AlibabaCloud.TeaXML, Version=0.0.3.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\AlibabaCloud.TeaXML.0.0.3\lib\net45\AlibabaCloud.TeaXML.dll</HintPath>
+    </Reference>
+    <Reference Include="Aliyun.Credentials, Version=1.3.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\Aliyun.Credentials.1.3.1\lib\net45\Aliyun.Credentials.dll</HintPath>
+    </Reference>
+    <Reference Include="AsyncIO, Version=0.1.69.0, Culture=neutral, PublicKeyToken=44a94435bd6f33f8, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\AsyncIO.0.1.69\lib\net40\AsyncIO.dll</HintPath>
+    </Reference>
+    <Reference Include="AutomaticUpdaterWPF, Version=2.6.18.4, Culture=neutral, PublicKeyToken=41f970429d9c8a0e, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\AutomaticUpdaterWPF.dll</HintPath>
+    </Reference>
+    <Reference Include="AvalonWizard, Version=1.2.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\AvalonWizard.dll</HintPath>
+    </Reference>
+    <Reference Include="AvalonWizard.Mvvm, Version=1.2.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\AvalonWizard.Mvvm.dll</HintPath>
+    </Reference>
+    <Reference Include="BouncyCastle.Crypto, Version=1.9.0.0, Culture=neutral, PublicKeyToken=0e99375e54769942, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\Portable.BouncyCastle.1.9.0\lib\net40\BouncyCastle.Crypto.dll</HintPath>
+    </Reference>
+    <Reference Include="Caliburn.Micro, Version=2.0.2.0, Culture=neutral, PublicKeyToken=8e5891231f2ed21f, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\Caliburn.Micro.dll</HintPath>
+    </Reference>
+    <Reference Include="ClosedXML, Version=0.76.0.0, Culture=neutral, PublicKeyToken=fd1eb21b62ae805b, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\ClosedXML.dll</HintPath>
+    </Reference>
+    <Reference Include="DocumentFormat.OpenXml, Version=2.5.5631.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\DocumentFormat.OpenXml.dll</HintPath>
+    </Reference>
+    <Reference Include="FxServerAdapter, Version=1.0.1.2, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\FxServerAdapter.dll</HintPath>
+    </Reference>
+    <Reference Include="FxServerClient, Version=1.0.1.2, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\FxServerClient.dll</HintPath>
+    </Reference>
+    <Reference Include="FxServerCryptoCS, Version=1.0.1.2, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\FxServerCryptoCS.dll</HintPath>
+    </Reference>
+    <Reference Include="GalaSoft.MvvmLight, Version=5.1.1.35051, Culture=neutral, PublicKeyToken=0e453835af4ee6ce, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\GalaSoft.MvvmLight.dll</HintPath>
+    </Reference>
+    <Reference Include="GalaSoft.MvvmLight.Extras, Version=5.1.1.35049, Culture=neutral, PublicKeyToken=f46ff315b1088208, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\GalaSoft.MvvmLight.Extras.dll</HintPath>
+    </Reference>
+    <Reference Include="Google.Protobuf, Version=3.21.9.0, Culture=neutral, PublicKeyToken=a7d26565bac4d604, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\Google.Protobuf.3.21.9\lib\net45\Google.Protobuf.dll</HintPath>
+    </Reference>
+    <Reference Include="ICSharpCode.AvalonEdit, Version=4.3.1.9429, Culture=neutral, PublicKeyToken=9cc39be672370310, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\ICSharpCode.AvalonEdit.dll</HintPath>
+    </Reference>
+    <Reference Include="ICSharpCode.NRefactory, Version=5.0.0.0, Culture=neutral, PublicKeyToken=d4bfe873e7598c49, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\ICSharpCode.NRefactory.dll</HintPath>
+    </Reference>
+    <Reference Include="ICSharpCode.NRefactory.CSharp, Version=5.0.0.0, Culture=neutral, PublicKeyToken=d4bfe873e7598c49, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\ICSharpCode.NRefactory.CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="ICSharpCode.SharpZipLib, Version=0.86.0.518, Culture=neutral, PublicKeyToken=1b03e6acf1164f73, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\ICSharpCode.SharpZipLib.dll</HintPath>
+    </Reference>
+    <Reference Include="K4os.Compression.LZ4, Version=1.2.6.0, Culture=neutral, PublicKeyToken=2186fa9121ef231d, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\K4os.Compression.LZ4.1.2.6\lib\net46\K4os.Compression.LZ4.dll</HintPath>
+    </Reference>
+    <Reference Include="K4os.Compression.LZ4.Streams, Version=1.2.6.0, Culture=neutral, PublicKeyToken=2186fa9121ef231d, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\K4os.Compression.LZ4.Streams.1.2.6\lib\net46\K4os.Compression.LZ4.Streams.dll</HintPath>
+    </Reference>
+    <Reference Include="K4os.Hash.xxHash, Version=1.0.6.0, Culture=neutral, PublicKeyToken=32cd54395057cec3, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\K4os.Hash.xxHash.1.0.6\lib\net46\K4os.Hash.xxHash.dll</HintPath>
+    </Reference>
+    <Reference Include="LoginId, Version=0.0.0.0, Culture=neutral, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mT4Packages\LoginId.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.AlertManager, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.AlertManager.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.Chart, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.Chart.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.CodeBuilder, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.CodeBuilder.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.CodeGenerator, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.CodeGenerator.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.CodeManager, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.CodeManager.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.CollectionEditor, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.CollectionEditor.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.Common, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.Core, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.DataFeed, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.DataFeed.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.DataServer, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.DataServer.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.FxBroker, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.FxBroker.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.GlobalManager, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.GlobalManager.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.IBroker, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.IBroker.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.Interfaces, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.Interfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.MVVM, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.MVVM.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.StockChartX, Version=2.4.15.257, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.StockChartX.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.TASDK, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.TASDK.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.UserCode, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.UserCode.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.ViewModelInterfaces, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.ViewModelInterfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.ViewModels, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.ViewModels.dll</HintPath>
+    </Reference>
+    <Reference Include="M4.Views, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\M4.Views.dll</HintPath>
+    </Reference>
+    <Reference Include="mFinance.Chart, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\mFinance.Chart.dll</HintPath>
+    </Reference>
+    <Reference Include="mFinance.Common, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\mFinance.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="mFinance.Languages, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\mFinance.Languages.dll</HintPath>
+    </Reference>
+    <Reference Include="mFinance.Net, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\mFinance.Net.dll</HintPath>
+    </Reference>
+    <Reference Include="mFinance.Settings, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\mFinance.Settings.dll</HintPath>
+    </Reference>
+    <Reference Include="mFinanceModels, Version=1.0.1.2, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\mFinanceModels.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Practices.ServiceLocation, Version=1.3.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\Microsoft.Practices.ServiceLocation.dll</HintPath>
+    </Reference>
+    <Reference Include="Modulus.License, Version=1.0.0.0, Culture=neutral, PublicKeyToken=e2031b08182ae40e, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\Modulus.License.dll</HintPath>
+    </Reference>
+    <Reference Include="Mono.Cecil, Version=0.9.6.0, Culture=neutral, PublicKeyToken=0738eb9f132ed756, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\Mono.Cecil.dll</HintPath>
+    </Reference>
+    <Reference Include="MT4ServerAPI, Version=4.1367.8433.8770, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mT4Packages\MT4ServerAPI.dll</HintPath>
+    </Reference>
+    <Reference Include="mt5api, Version=5.3677.1.2, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\uClient\mT5Packages\mt5api.dll</HintPath>
+    </Reference>
+    <Reference Include="MTClientAPI, Version=4.0.1170.33, Culture=neutral, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\15-gold\09-平台和数据源\05-MT4平台开发接口\04-张国惠\xClient-20210126\xClient\bin\Debug\MTClientAPI.dll</HintPath>
+    </Reference>
+    <Reference Include="MySql.Data, Version=8.0.32.0, Culture=neutral, PublicKeyToken=c5687fc88969c44d, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\MySql.Data.8.0.32.1\lib\net452\MySql.Data.dll</HintPath>
+    </Reference>
+    <Reference Include="NaCl, Version=0.1.13.0, Culture=neutral, PublicKeyToken=827c20e50a9775fa, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\NaCl.Net.0.1.13\lib\net472\NaCl.dll</HintPath>
+    </Reference>
+    <Reference Include="NetMQ, Version=4.0.1.8, Culture=neutral, PublicKeyToken=a6decef4ddc58b3a, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\NetMQ.4.0.1.8\lib\net47\NetMQ.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\Newtonsoft.Json.13.0.2-beta1\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="NLog, Version=5.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\NLog.5.1.4\lib\net46\NLog.dll</HintPath>
+    </Reference>
+    <Reference Include="protobuf-net, Version=2.0.0.668, Culture=neutral, PublicKeyToken=257b51d87d2e4d67, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\protobuf-net.dll</HintPath>
+    </Reference>
+    <Reference Include="SUI_mF4, Version=1.0.0.1160, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\SUI_mF4.exe</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Buffers, Version=4.0.3.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\System.Buffers.4.5.1\lib\net461\System.Buffers.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Configuration" />
+    <Reference Include="System.Configuration.Install" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.DirectoryServices" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.Management" />
+    <Reference Include="System.Memory, Version=4.0.1.2, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\System.Memory.4.5.5\lib\net461\System.Memory.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Net.Http.Extensions, Version=2.2.29.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\Microsoft.Net.Http.2.2.29\lib\net45\System.Net.Http.Extensions.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Net.Http.Primitives, Version=4.2.29.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\Microsoft.Net.Http.2.2.29\lib\net45\System.Net.Http.Primitives.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Net.Http.WebRequest" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Numerics.Vectors, Version=4.1.4.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\System.Numerics.Vectors.4.5.0\lib\net46\System.Numerics.Vectors.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\System.Runtime.CompilerServices.Unsafe.6.0.0\lib\net461\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Security" />
+    <Reference Include="System.ServiceModel" />
+    <Reference Include="System.Threading.Tasks.Extensions, Version=4.2.0.1, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\System.Threading.Tasks.Extensions.4.5.4\lib\net461\System.Threading.Tasks.Extensions.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Transactions" />
+    <Reference Include="System.ValueTuple, Version=4.0.3.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\System.ValueTuple.4.5.0\lib\net47\System.ValueTuple.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Web" />
+    <Reference Include="System.Windows.Forms.DataVisualization" />
+    <Reference Include="System.Windows.Forms.DataVisualization.Design" />
+    <Reference Include="System.Windows.Interactivity, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\System.Windows.Interactivity.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Xaml" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Deployment" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+    <Reference Include="Tea, Version=1.0.11.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\WindowsFormsApp2\packages\Tea.1.0.11\lib\net45\Tea.dll</HintPath>
+    </Reference>
+    <Reference Include="wyUpdate, Version=2.6.18.4, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\wyUpdate.exe</HintPath>
+    </Reference>
+    <Reference Include="Xceed.Wpf.AvalonDock, Version=2.2.0.0, Culture=neutral, PublicKeyToken=3e4669d2f30244f4, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\Xceed.Wpf.AvalonDock.dll</HintPath>
+    </Reference>
+    <Reference Include="Xceed.Wpf.Toolkit, Version=2.2.0.0, Culture=neutral, PublicKeyToken=3e4669d2f30244f4, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>mF4Packages\Xceed.Wpf.Toolkit.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="AutoTradeForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="AutoTradeForm.Designer.cs">
+      <DependentUpon>AutoTradeForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <EmbeddedResource Include="AutoTradeForm.resx">
+      <DependentUpon>AutoTradeForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <WCFMetadata Include="Connected Services\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="devdoc\Readme.txt" />
+    <Content Include="LONGJIAO.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <BootstrapperPackage Include=".NETFramework,Version=v4.7.2">
+      <Visible>False</Visible>
+      <ProductName>Microsoft .NET Framework 4.7.2 %28x86 and x64%29</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\uClient\AutoTrade.csproj">
+      <Project>{dff3a608-5d1c-47dc-a1f1-67cdc7bbd8f9}</Project>
+      <Name>AutoTrade</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="AlibabaCloud.EndpointUtil">
+      <Version>0.1.1</Version>
+    </PackageReference>
+    <PackageReference Include="Google.Protobuf">
+      <Version>3.22.1</Version>
+    </PackageReference>
+    <PackageReference Include="HgLib.DB">
+      <Version>1.1.10</Version>
+    </PackageReference>
+    <PackageReference Include="IKVM.Runtime.JNI">
+      <Version>7.2.4630.5</Version>
+    </PackageReference>
+    <PackageReference Include="K4os.Compression.LZ4">
+      <Version>1.3.8</Version>
+    </PackageReference>
+    <PackageReference Include="K4os.Compression.LZ4.Streams">
+      <Version>1.2.6</Version>
+    </PackageReference>
+    <PackageReference Include="MathNet.Numerics">
+      <Version>5.0.0</Version>
+    </PackageReference>
+    <PackageReference Include="Microsoft.CSharp">
+      <Version>4.7.0</Version>
+    </PackageReference>
+    <PackageReference Include="Mono.Posix">
+      <Version>7.1.0-final.1.21458.1</Version>
+    </PackageReference>
+    <PackageReference Include="MySql.Data">
+      <Version>8.0.32.1</Version>
+    </PackageReference>
+    <PackageReference Include="NetMQ">
+      <Version>4.0.1.16</Version>
+    </PackageReference>
+    <PackageReference Include="Newtonsoft.Json">
+      <Version>13.0.2</Version>
+    </PackageReference>
+    <PackageReference Include="NLog">
+      <Version>5.1.4</Version>
+    </PackageReference>
+    <PackageReference Include="Npgsql">
+      <Version>8.0.0-preview.2</Version>
+    </PackageReference>
+    <PackageReference Include="Quartz">
+      <Version>3.13.1</Version>
+    </PackageReference>
+    <PackageReference Include="SharpZipLib">
+      <Version>1.3.3</Version>
+    </PackageReference>
+    <PackageReference Include="System.Buffers">
+      <Version>4.5.1</Version>
+    </PackageReference>
+    <PackageReference Include="System.Data.SQLite">
+      <Version>1.0.117</Version>
+    </PackageReference>
+    <PackageReference Include="System.Memory">
+      <Version>4.5.5</Version>
+    </PackageReference>
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe">
+      <Version>6.1.0</Version>
+    </PackageReference>
+    <PackageReference Include="System.Runtime.InteropServices.RuntimeInformation">
+      <Version>4.3.0</Version>
+    </PackageReference>
+    <PackageReference Include="System.Text.Encoding.CodePages">
+      <Version>8.0.0-preview.2.23128.3</Version>
+    </PackageReference>
+    <PackageReference Include="System.Text.Json">
+      <Version>8.0.5</Version>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Utils\" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="..\AutoTradeEA\packages\EntityFramework.6.4.4\build\EntityFramework.targets" Condition="Exists('..\AutoTradeEA\packages\EntityFramework.6.4.4\build\EntityFramework.targets')" />
+  <Import Project="..\AutoTradeEA\packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.117.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets" Condition="Exists('..\AutoTradeEA\packages\Stub.System.Data.SQLite.Core.NetFramework.1.0.117.0\build\net46\Stub.System.Data.SQLite.Core.NetFramework.targets')" />
+  <Import Project="..\AutoTradeEA\packages\Microsoft.Extensions.Logging.Abstractions.6.0.0\build\Microsoft.Extensions.Logging.Abstractions.targets" Condition="Exists('..\AutoTradeEA\packages\Microsoft.Extensions.Logging.Abstractions.6.0.0\build\Microsoft.Extensions.Logging.Abstractions.targets')" />
+  <Import Project="..\AutoTradeEA\packages\Mono.Unix.7.1.0-final.1.21458.1\build\Mono.Unix.targets" Condition="Exists('..\AutoTradeEA\packages\Mono.Unix.7.1.0-final.1.21458.1\build\Mono.Unix.targets')" />
+</Project>

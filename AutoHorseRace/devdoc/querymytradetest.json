@@ -1,0 +1,42 @@
+{
+  "success": true,
+  "count": 4,
+  "data": [
+    {
+      "trade_id": "TX00CDC6BB7D04",
+      "combo": "1-2",
+      "trade_type": "BET",
+      "odds": "83",
+      "stake_amount": 25,
+      "status": "MATCHED",
+      "timestamp": "2026-07-18 20:04:02"
+    },
+    {
+      "trade_id": "TX805E610B8608",
+      "combo": "1-3",
+      "trade_type": "EAT",
+      "odds": "81",
+      "stake_amount": 30,
+      "status": "MATCHED",
+      "timestamp": "2026-07-18 20:04:02"
+    },
+    {
+      "trade_id": "TX27981CE5F3F6",
+      "combo": "1-2",
+      "trade_type": "EAT",
+      "odds": "86",
+      "stake_amount": 10,
+      "status": "MATCHED",
+      "timestamp": "2026-07-18 20:04:02"
+    },
+    {
+      "trade_id": "TXA434D9E41C4E",
+      "combo": "1-5",
+      "trade_type": "EAT",
+      "odds": "81",
+      "stake_amount": 44,
+      "status": "MATCHED",
+      "timestamp": "2026-07-18 20:04:02"
+    }
+  ]
+}

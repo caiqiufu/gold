@@ -1,0 +1,209 @@
+2026-07-18 09:09:19,172 - [INFO] - [vcd666888] ➔ [下单请求] 连赢下注 | 组合: 1-5 | 赔率: 12.5 | 限额: 500 | 金额: 10 元
+2026-07-18 09:09:19,595 - [INFO] - ⏱️ 账户 [vcd666888] 活跃时间已更新，当前为: 2026-07-18 09:09:19
+2026-07-18 09:09:19,596 - [INFO] - [vcd666888]    ✅ 交易确认成功！(连赢下注 1-5)
+2026-07-18 09:09:19,596 - [INFO] - ⏱️ 账户 [vcd666888] 活跃时间已更新，当前为: 2026-07-18 09:09:19
+INFO:     127.0.0.1:62055 - "POST /api/v1/trade/auto-trade HTTP/1.1" 200 OK
+2026-07-18 09:09:37,119 - [INFO] - ⚡ 发起交易：账号 [vcd666888] 自动化交易流程启动... 场次类型: 14H | 日期: 18-07-2026
+2026-07-18 09:09:37,119 - [INFO] - ⏱️ [缓存判定] 账户 [vcd666888] 距离上次活跃仅过去 17.5 秒，状态完好
+2026-07-18 09:09:37,120 - [INFO] - ⏱️ 账户 [vcd666888] 活跃时间已顺延更新，当前为: 2026-07-18 09:09:37
+2026-07-18 09:09:37,120 - [INFO] - ⏱️ [缓存判定] 账户 [vcd666888] 距离上次活跃仅过去 0.0 秒，状态完好
+2026-07-18 09:09:37,120 - [INFO] - ⏱️ 账户 [vcd666888] 活跃时间已顺延更新，当前为: 2026-07-18 09:09:37
+2026-07-18 09:09:37,120 - [INFO] - [vcd666888] ➔ [下单请求] 连赢下注 | 组合: 1-5 | 赔率: 12.5 | 限额: 500 | 金额: 10 元
+2026-07-18 09:09:37,253 - [INFO] - ⏱️ 账户 [vcd666888] 活跃时间已更新，当前为: 2026-07-18 09:09:37
+2026-07-18 09:09:37,253 - [INFO] - [vcd666888]    ✅ 交易确认成功！(连赢下注 1-5)
+2026-07-18 09:09:37,253 - [INFO] - ⏱️ 账户 [vcd666888] 活跃时间已更新，当前为: 2026-07-18 09:09:37
+
+
+{
+  "username": "vcd666888",
+  "race_type": "14H",
+  "race_date": "18-07-2026",
+  "stake_amount": 10,
+  "market_data": {
+    "additionalProp1": {}
+  },
+  "trade_targets": [
+    {
+      "col_name": "Q_BET",
+      "combo": "1-5",
+      "fctype": "0",
+      "limit": "500",
+      "odds": "12.5",
+      "race": "1",
+      "stake_amount": 10,
+      "trade_type": "EAT"
+    }
+  ]
+}
+
+
+{
+  "username": "vcd888666",
+  "race_type": "14H",
+  "race_date": "25-07-2026",
+  "stake_amount": 10,
+  "market_data": {},
+  "trade_targets": [
+    {
+      "col_name": "Q_EAT",
+      "combo": "1-2",
+      "fctype": "0",
+      "limit": "700",
+      "odds": "81",
+      "race": "1",
+      "stake_amount": 10,
+      "trade_type": "BET"
+    }
+  ]
+}
+
+{
+  "success": true,
+  "result": {
+    "success": true,
+    "executed_count": 1,
+    "details": [
+      {
+        "col_name": "Q_EAT",
+        "stake_amount": 10,
+        "combo": "1-2",
+        "trade_type": "BET",
+        "status": "SUCCESS",
+        "info": "已成功下注"
+      }
+    ],
+    "message": "自动化对冲流程执行成功"
+  }
+}
+
+
+
+{
+  "success": true,
+  "result": {
+    "success": true,
+    "executed_count": 1,
+    "details": [
+      {
+        "column": "Q_BET",
+        "combo": "1-5",
+        "trade_type": "EAT",
+        "amount": 10,
+        "success": true,
+        "message": "交易确认成功"
+      }
+    ]
+  }
+}
+
+
+{
+  "success": true,
+  "result": {
+    "success": false,
+    "executed_count": 0,
+    "details": [
+      {
+        "column": "Q_BET",
+        "combo": "1-5",
+        "trade_type": "EAT",
+        "amount": 15,
+        "success": false,
+        "message": "Total ticket value per race exceeded. Contact agent for limit increase. Available tickets value: $10"
+      }
+    ]
+  }
+}
+
+
+{
+  "username": "vcd666888",
+  "race_type": "14H",
+  "race_date": "18-07-2026",
+  "stake_amount": 15,
+  "market_data": {
+    "additionalProp1": {}
+  },
+  "trade_targets": [
+    {
+      "col_name": "Q_BET",
+      "combo": "1-5",
+      "fctype": "0",
+      "limit": "500",
+      "odds": "12.5",
+      "race": "1",
+      "stake_amount": 10,
+      "trade_type": "EAT"
+    },
+    {
+      "col_name": "Q_BET",
+      "combo": "1-5",
+      "fctype": "0",
+      "limit": "500",
+      "odds": "12.5",
+      "race": "1",
+      "stake_amount": 15,
+      "trade_type": "EAT"
+    }
+  ]
+}
+
+{
+  "success": true,
+  "result": {
+    "success": false,
+    "executed_count": 0,
+    "details": [
+      {
+        "column": "Q_BET",
+        "combo": "1-5",
+        "trade_type": "EAT",
+        "amount": 10,
+        "success": false,
+        "message": "<script>document.domain = 'ctb988.com';</script><script>top.logout();</script>"
+      },
+      {
+        "column": "Q_BET",
+        "combo": "1-5",
+        "trade_type": "EAT",
+        "amount": 15,
+        "success": false,
+        "message": "<script>document.domain = 'ctb988.com';</script><script>top.logout();</script>"
+      }
+    ]
+  }
+}
+
+{
+  "success": true,
+  "result": {
+    "success": false,
+    "executed_count": 0,
+    "details": [
+      {
+        "combo": "1-2",
+        "trade_type": "BET",
+        "status": "FAILED",
+        "info": "Sorry! Ticket has been taken up."
+      }
+    ],
+    "message": "对冲执行未完全成功"
+  }
+}
+
+{
+  "success": true,
+  "result": {
+    "success": true,
+    "executed_count": 1,
+    "details": [
+      {
+        "combo": "1-2",
+        "trade_type": "EAT",
+        "status": "SUCCESS",
+        "info": "已成功吃单"
+      }
+    ],
+    "message": "自动化对冲流程执行成功"
+  }
+}

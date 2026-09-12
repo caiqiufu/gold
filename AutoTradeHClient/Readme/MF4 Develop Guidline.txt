@@ -1,0 +1,100 @@
+﻿1. Copy project in source folder  E:\OneDrive\07-svn\01-gold AutoTradeSUI 
+2. Change project name to target project name: project name,AutoTradeXXX.csproj  AutoTradeXXX.csproj.user
+3. Copy install files to mF4Packages folder
+4. Add existing project to Solution
+5. Change project name, right click project, select propeProperties->
+Application->change Assembly name to AutoTradeXXX
+Reference Paths-> Add E:\OneDrive\07-svn\01-gold\AutoTradeXXX\mF4Packages\
+6. NuGet management, Open Tools->NuGet Package Management->Package Manager Console, run conmand: Update-Package -ProjectName 'AutoTradeXXX'  -Reinstall
+7. Add References, 
+First, remove all refernece files
+Secend,Right click "Reference" -> Add Reference -> Assemblies, select item : 
+Microsoft.CSharp
+System
+System.Configuration
+System.Core
+System.Data
+System.Data.DataSetExtension
+System.Deployment
+System.Drawing
+System.IO.Compression
+System.Net.Http
+System.Numberics
+System.Runtime.Serialization
+System.ServiceModel
+System.Transaction
+System.Windows.Forms
+System.Xaml
+System.Xml
+System.Xml.Ling
+Third,Browse and select all files
+Then update grade NLog to latestion version
+7.Change code file Client, check soft version, SUI is new version, EMP is old version
+var versionInfo = FileVersionInfo.GetVersionInfo(Application.StartupPath + "\\zyj_mF4.exe");
+8. Change file "MainForm.cs" in project iAutoTrade
+       private string GenerateFilePath(string platFormCode, string brokerCode)
+        {
+            DirectoryInfo pathInfo = new DirectoryInfo(Application.StartupPath);
+            string path = pathInfo.Parent.FullName;
+            string MT4Path = path + "\\AutoTradeMT4";
+            string V4Path = path + "\\AutoTradeV4";
+            string EPMPath = path + "\\AutoTradeEPM";
+            string SUIPath = path + "\\AutoTradeSUI";
+            string TRPath = path + "\\AutoTradeTR";
+#if DEBUG
+            MT4Path = "E:\\OneDrive\\07-svn\\01-gold\\AutoTradeMT4\\bin\\Debug";
+            V4Path = "E:\\OneDrive\\07-svn\\01-gold\\AutoTradeV4\\bin\\Debug";
+            EPMPath = "E:\\OneDrive\\07-svn\\01-gold\\AutoTradeEPM\\bin\\Debug";
+            SUIPath = "E:\\OneDrive\\07-svn\\01-gold\\AutoTradeSUI\\bin\\Debug";
+            TRPath = "E:\\OneDrive\\07-svn\\01-gold\\AutoTradeTR\\bin\\Debug";
+#endif
+            MT4Path = path + "\\AutoTradeMT4";
+            V4Path = path + "\\AutoTradeV4";
+            EPMPath = path + "\\AutoTradeEPM";
+            SUIPath = path + "\\AutoTradeSUI";
+            TRPath = path + "\\AutoTradeTR";
+            string destFile = "";
+            switch (platFormCode)
+            {
+                case "MT4":
+                    destFile = System.IO.Path.Combine(MT4Path, "AutoTradeMT4.exe");
+                    break;
+                case "V4":
+                    destFile = System.IO.Path.Combine(V4Path, "AutoTradeV4.exe");
+                    break;
+                case "MF4":
+                    switch(brokerCode)
+                    {
+                        case "SUI":
+                            destFile = System.IO.Path.Combine(SUIPath, "AutoTradeSUI.exe");
+                            break;
+                        case "EPM":
+                            destFile = System.IO.Path.Combine(EPMPath, "AutoTradeEPM.exe");
+                            break;
+                        case "TR":
+                            destFile = System.IO.Path.Combine(TRPath, "AutoTradeTR.exe");
+                            break;
+                    }
+                        break;
+            }
+            return destFile;
+        }
+
+9. Change configuration file "Config.json"
+10. Change project file TradeForm.cs
+public TradeForm(MainFormPara mainFormPara) : base()
+        {
+            if (mainFormPara == null)
+            {
+                mainFormPara = new MainFormPara();
+                mainFormPara.PlatformCode = "MF4";
+                mainFormPara.BrokerCode = "ZYJ";
+                mainFormPara.BrokerName = "中盈金";
+                mainFormPara.FormType = "MF4";
+                mainFormPara.FormNo = "";
+            }
+            _MainFormPara = mainFormPara;
+            CheckForIllegalCrossThreadCalls = false;
+        }
+11.Update Deply.bat file
+12.Copy folder "wav" to "AutoTradeXXX\bin\Debug" and "AutoTradeXXX\bin\Release"

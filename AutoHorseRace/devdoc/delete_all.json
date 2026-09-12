@@ -1,0 +1,15 @@
+{
+  "batch_bet_mr": "1,11,14H,08-08-2026,14H,1",
+  "batch_eat_mr": "1,6,14H,08-08-2026,14H,1",
+  "race_date": "08-08-2026",
+  "race_num": "1",
+  "race_type": "14H",
+  "username": "vcd888666"
+}
+
+{
+  "status": "success",
+  "data": {
+    "success": true
+  }
+}

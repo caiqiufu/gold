@@ -1,0 +1,16 @@
+{
+  "profiles": {
+    "T4ExampleLinuxCs": {
+      "commandName": "Project"
+    },
+    "WSL2": {
+      "commandName": "Executable",
+      "executablePath": "wsl",
+      "commandLineArgs": "dotnet T4ExampleLinuxCs.dll"
+    },
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
+    }
+  }
+}

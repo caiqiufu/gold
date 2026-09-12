@@ -1,0 +1,118 @@
+{
+  "username": "vcd888666",
+  "race_type": "14H",
+  "v_name": "日本赛马",
+  "race_date": "08-08-2026",
+  "race_num": "1"
+}
+
+{
+  "success": true,
+  "data": {
+    "username": "vcd888666",
+    "race_date": "08-08-2026",
+    "race_num": "1",
+    "confirmed_count": 7,
+    "confirmed_items": [
+      {
+        "side": "B",
+        "race": "1",
+        "q_type": "Q",
+        "horses": "1-2",
+        "stake": "40",
+        "pct": "81",
+        "limit": "700",
+        "mode_str": "赌 (连赢)"
+      },
+      {
+        "side": "B",
+        "race": "1",
+        "q_type": "Q",
+        "horses": "1-6",
+        "stake": "10",
+        "pct": "81",
+        "limit": "700",
+        "mode_str": "赌 (连赢)"
+      },
+      {
+        "side": "E",
+        "race": "1",
+        "q_type": "Q",
+        "horses": "1-6",
+        "stake": "10",
+        "pct": "81",
+        "limit": "700",
+        "mode_str": "吃 (连赢)"
+      },
+      {
+        "side": "E",
+        "race": "1",
+        "q_type": "Q",
+        "horses": "4-6",
+        "stake": "50",
+        "pct": "81",
+        "limit": "700",
+        "mode_str": "吃 (连赢)"
+      },
+      {
+        "side": "B",
+        "race": "1",
+        "q_type": "QP",
+        "horses": "(1-2)",
+        "stake": "20",
+        "pct": "81",
+        "limit": "400",
+        "mode_str": "赌 (位置Q)"
+      },
+      {
+        "side": "E",
+        "race": "1",
+        "q_type": "QP",
+        "horses": "(1-2)",
+        "stake": "20",
+        "pct": "81",
+        "limit": "400",
+        "mode_str": "吃 (位置Q)"
+      },
+      {
+        "side": "E",
+        "race": "1",
+        "q_type": "QP",
+        "horses": "(4-6)",
+        "stake": "10",
+        "pct": "81",
+        "limit": "150",
+        "mode_str": "吃 (位置Q)"
+      }
+    ],
+    "pending_count": 2,
+    "pending_items": [
+      {
+        "side": "B",
+        "mr_params": "168601149,3,0,08-08-2026,14H,1",
+        "race": "1",
+        "q_type": "Q",
+        "horses": "1-3",
+        "stake": "10",
+        "pct": "81",
+        "limit": "700",
+        "mode_str": "赌 (连赢)"
+      },
+      {
+        "side": "B",
+        "mr_params": "168600679,3,0,08-08-2026,14H,1",
+        "race": "1",
+        "q_type": "QP",
+        "horses": "(1-2)",
+        "stake": "10",
+        "pct": "81",
+        "limit": "400",
+        "mode_str": "赌 (位置Q)"
+      }
+    ],
+    "batch_delete_params": {
+      "batch_bet_mr": "1,11,14H,08-08-2026,14H,1",
+      "batch_eat_mr": null
+    }
+  }
+}

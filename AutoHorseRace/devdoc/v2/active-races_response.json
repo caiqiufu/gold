@@ -1,0 +1,259 @@
+{
+  "success": true,
+  "username": "vcd888666",
+  "race_date": "15-08-2026",
+  "venue_count": 12,
+  "venues": [
+    {
+      "country": "日本",
+      "name": "札幌",
+      "display_name": "日本 [札幌]",
+      "category": "赛马",
+      "race_type": "36J",
+      "race_date": "15-08-2026",
+      "default_rc": "0",
+      "active_races": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12"
+      ]
+    },
+    {
+      "country": "日本",
+      "name": "新潟",
+      "display_name": "日本 [新潟]",
+      "category": "赛马",
+      "race_type": "34J",
+      "race_date": "15-08-2026",
+      "default_rc": "0",
+      "active_races": [
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12"
+      ]
+    },
+    {
+      "country": "日本",
+      "name": "西武園",
+      "display_name": "日本 [西武園]",
+      "category": "Q盘",
+      "race_type": "394J",
+      "race_date": "15-08-2026",
+      "default_rc": "0",
+      "active_races": [
+        "6",
+        "7"
+      ]
+    },
+    {
+      "country": "日本",
+      "name": "中京",
+      "display_name": "日本 [中京]",
+      "category": "Q盘",
+      "race_type": "35J",
+      "race_date": "15-08-2026",
+      "default_rc": "0",
+      "active_races": [
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12"
+      ]
+    },
+    {
+      "country": "日本",
+      "name": "京王閣",
+      "display_name": "日本 [京王閣]",
+      "category": "竞轮",
+      "race_type": "395J",
+      "race_date": "15-08-2026",
+      "default_rc": "0",
+      "active_races": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12"
+      ]
+    },
+    {
+      "country": "日本",
+      "name": "奈良",
+      "display_name": "日本 [奈良]",
+      "category": "竞轮",
+      "race_type": "396J",
+      "race_date": "15-08-2026",
+      "default_rc": "0",
+      "active_races": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12"
+      ]
+    },
+    {
+      "country": "日本",
+      "name": "伊勢崎",
+      "display_name": "日本 [伊勢崎]",
+      "category": "走车",
+      "race_type": "409J",
+      "race_date": "15-08-2026",
+      "default_rc": "0",
+      "active_races": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12"
+      ]
+    },
+    {
+      "country": "日本",
+      "name": "松山",
+      "display_name": "日本 [松山]",
+      "category": "竞轮",
+      "race_type": "397J",
+      "race_date": "15-08-2026",
+      "default_rc": "0",
+      "active_races": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11"
+      ]
+    },
+    {
+      "country": "日本",
+      "name": "大井",
+      "display_name": "日本 [大井]",
+      "category": "赛马",
+      "race_type": "30J",
+      "race_date": "15-08-2026",
+      "default_rc": "0",
+      "active_races": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10"
+      ]
+    },
+    {
+      "country": "日本",
+      "name": "前橋",
+      "display_name": "日本 [前橋]",
+      "category": "竞轮",
+      "race_type": "398J",
+      "race_date": "15-08-2026",
+      "default_rc": "0",
+      "active_races": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ]
+    },
+    {
+      "country": "日本",
+      "name": "静岡",
+      "display_name": "日本 [静岡]",
+      "category": "竞轮",
+      "race_type": "399J",
+      "race_date": "15-08-2026",
+      "default_rc": "0",
+      "active_races": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ]
+    },
+    {
+      "country": "日本",
+      "name": "飯塚",
+      "display_name": "日本 [飯塚]",
+      "category": "走车",
+      "race_type": "410J",
+      "race_date": "15-08-2026",
+      "default_rc": "0",
+      "active_races": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8"
+      ]
+    }
+  ]
+}

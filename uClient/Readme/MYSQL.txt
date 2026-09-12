@@ -1,0 +1,2 @@
+﻿1)SET SQL_SAFE_UPDATES = 0;
+2)数据表ID采用自动生成

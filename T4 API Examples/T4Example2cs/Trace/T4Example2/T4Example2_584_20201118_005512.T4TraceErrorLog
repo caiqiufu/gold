@@ -1,0 +1,9 @@
+﻿<i d="0001-01-01T00:00:00.0000000" t="3" c="Trace" m="T4TraceListener version: [4.7.39.5]" s="0" />
+<i d="0001-01-01T00:00:00.0000000" t="3" c="Trace" m="Windows version: [Microsoft Windows 10 专业版 - 6.2.9200.0]" s="1" />
+<i d="0001-01-01T00:00:00.0000000" t="3" c="Trace" m="Microsoft .Net Framework version detected [4.0.30319.42000], expecting [4.0.30319.42000], 64bit, .NET Framework Version 4.7 or later" s="2" />
+<i d="0001-01-01T00:00:00.0000000" t="3" c="Trace" m="GC.IsServerGC: [False], GC.LatencyMode: [Interactive], Debugger.IsAttached: [True]" s="3" />
+<i d="0001-01-01T00:00:00.0000000" t="3" c="Trace" m="Environment: UserDomainName: [CAIQIUFU], UserName: [Chai], UserInteractive: [True]" s="4" />
+<i d="0001-01-01T00:00:00.0000000" t="3" c="Trace" m="Processor: [Architecture: AMD64, Level: 6, Revision: 3d04, Identifier: Intel64 Family 6 Model 61 Stepping 4, GenuineIntel, Cores: 4]" s="5" />
+<i d="0001-01-01T00:00:00.0000000" t="3" c="Trace" m="Timezone: [(UTC+08:00) 北京，重庆，香港特别行政区，乌鲁木齐]" s="6" />
+<i d="0001-01-01T00:00:00.0000000" t="3" c="Trace" m="TraceListeners UseGlobalLock=False, System.Diagnostics.DefaultTraceListener (NOT ThreadSafe), T4.TraceListener.T4TraceListener" s="7" />
+<i d="2020-11-18T00:55:12.6273004+08:00" t="12" c="Error" m="HostConnection::SendMessage [sim7.t4login.com:443] ExecuteAndQuote Not logged in so cannot send message: ConnectionSettings" s="1110" />

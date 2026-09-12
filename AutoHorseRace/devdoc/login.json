@@ -1,0 +1,88 @@
+{
+  "username": "vcd888666",
+  "password": "aabb1122.m",
+  "pin": "1111"
+}
+
+{
+  "success": true,
+  "message": "账户 [vcd888666] 登录成功并已持久化会话。",
+  "cookies_count": 14,
+  "data": {
+    "username": "vcd888666",
+    "balance": "HK$499,975.52",
+    "pl": "HK<span  class=\"RD\">($24.48)</span>",
+    "races": [
+      {
+        "country": "JP",
+        "name": "Aomori",
+        "display_name": "JP [Aomori]",
+        "category": "竞轮",
+        "race_type": "400J",
+        "race_date": "12-08-2026",
+        "venue_link": "/Q.jsp?race_type=400J&race_date=12-08-2026"
+      },
+      {
+        "country": "JP",
+        "name": "Takeo",
+        "display_name": "JP [Takeo]",
+        "category": "竞轮",
+        "race_type": "399J",
+        "race_date": "12-08-2026",
+        "venue_link": "/Q.jsp?race_type=399J&race_date=12-08-2026"
+      },
+      {
+        "country": "JP",
+        "name": "園田",
+        "display_name": "JP [園田]",
+        "category": "赛马",
+        "race_type": "34J",
+        "race_date": "13-08-2026",
+        "venue_link": "/Q.jsp?race_type=34J&race_date=13-08-2026"
+      },
+      {
+        "country": "JP",
+        "name": "Kasamatsu",
+        "display_name": "JP [Kasamatsu]",
+        "category": "Q盘",
+        "race_type": "35J",
+        "race_date": "13-08-2026",
+        "venue_link": "/Q.jsp?race_type=35J&race_date=13-08-2026"
+      },
+      {
+        "country": "JP",
+        "name": "門別",
+        "display_name": "JP [門別]",
+        "category": "赛马",
+        "race_type": "36J",
+        "race_date": "13-08-2026",
+        "venue_link": "/Q.jsp?race_type=36J&race_date=13-08-2026"
+      },
+      {
+        "country": "JP",
+        "name": "Ohi",
+        "display_name": "JP [Ohi]",
+        "category": "赛马",
+        "race_type": "30J",
+        "race_date": "13-08-2026",
+        "venue_link": "/Q.jsp?race_type=30J&race_date=13-08-2026"
+      }
+    ],
+    "cookies": {
+      "JSESSIONID": "690F0A1C4E0DEF1710332F4E164BE2E1.node05",
+      "incap_ses_139_1278010": "15rzN+i4eFGO1DLL09PtAbh4fGoAAAAAtSXTSQtizzsS/OlAIn7NHA==",
+      "incap_ses_401_1278010": "4iJad8GXIhHf9SjBcqOQBfxufGoAAAAAka/NQ24r5UH3QVihMo/GWA==",
+      "incap_ses_406_1278010": "8Qp/bwlM52DpVt7462aiBfpufGoAAAAA+lvWMnRFvsK2W0lbfnOmlg==",
+      "incap_ses_433_1278010": "5k6GGuuDgn3cnIxVR1MCBvdufGoAAAAAaRfEayUX0B2wsDVuEs7YYw==",
+      "incap_ses_445_1278010": "QMscP+8BKCmsFT6aevUsBvhufGoAAAAA4cx/ku3qJThcWFuSk9P+8Q==",
+      "incap_ses_447_1278010": "bAq3SjUPdzGYRn/tcBA0Bv1ufGoAAAAAug45wWJ6jQl13V8jrXW8wQ==",
+      "incap_ses_448_1278010": "aaGcAIdKw1kqKPjl8Z03BvtufGoAAAAA07KzKhigim25K6ofUM57Ug==",
+      "incap_ses_477_1278010": "dLVtMc/K1mk/5euQUaWeBvlufGoAAAAA7/NXeVPvjrRNkyCq88Q3kw==",
+      "incap_ses_757_1278010": "t3imGX1480IJRb8lw2eBCvhufGoAAAAAw+TNvabCtu1VDU1s3cpB4g==",
+      "lang": "EN",
+      "load_balancer": "9a0ab31a-4001-47d7-a412-2b2bb3deae7b",
+      "nlbi_1278010": "LDJzZq37xy1RpxGxE+me0wAAAAA9bOXyj8w6XrH6VP6bhopZ",
+      "visid_incap_1278010": "TG6VtXRLQqy8ZdxCMoRkePdufGoAAAAAQUIPAAAAAABnwBmVca2Z7MAcSnyn8bAk"
+    }
+  }
+}

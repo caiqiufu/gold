@@ -1,0 +1,106 @@
+{
+  "success": true,
+  "count": 10,
+  "data": [
+    {
+      "date": "16 澳洲G 2026 星期日",
+      "location": "Japan-Chukyo",
+      "odds_type": "日本",
+      "stake": "70",
+      "tax": "$0.42",
+      "win_loss": "($57.92)",
+      "rd": "16-08-2026",
+      "type": "35J"
+    },
+    {
+      "date": "15 澳洲G 2026 星期六",
+      "location": "Japan-Sapporo",
+      "odds_type": "日本",
+      "stake": "30",
+      "tax": "$0.18",
+      "win_loss": "($24.48)",
+      "rd": "15-08-2026",
+      "type": "36J"
+    },
+    {
+      "date": "14 澳洲G 2026 星期五",
+      "location": "Takeo-Japan (Keirin)",
+      "odds_type": "日本",
+      "stake": "10",
+      "tax": "$0.06",
+      "win_loss": "($8.16)",
+      "rd": "14-08-2026",
+      "type": "399J"
+    },
+    {
+      "date": "13 澳洲G 2026 星期四",
+      "location": "Takeo-Japan (Keirin)",
+      "odds_type": "日本",
+      "stake": "30",
+      "tax": "$0.18",
+      "win_loss": "",
+      "rd": "13-08-2026",
+      "type": "399J"
+    },
+    {
+      "date": "12 澳洲G 2026 星期三",
+      "location": "Aomori-Japan (Keirin)",
+      "odds_type": "日本",
+      "stake": "30",
+      "tax": "$0.18",
+      "win_loss": "($24.48)",
+      "rd": "12-08-2026",
+      "type": "400J"
+    },
+    {
+      "date": "09 澳洲G 2026 星期日",
+      "location": "香港 O.seas-Deauville",
+      "odds_type": "香港",
+      "stake": "39",
+      "tax": "$0.24",
+      "win_loss": "($32.64)",
+      "rd": "09-08-2026",
+      "type": "171H"
+    },
+    {
+      "date": "08 澳洲G 2026 星期六",
+      "location": "香港 海外-雅士谷",
+      "odds_type": "香港",
+      "stake": "1700",
+      "tax": "$11.18",
+      "win_loss": "($8.16)",
+      "rd": "08-08-2026",
+      "type": "14H"
+    },
+    {
+      "date": "07 澳洲G 2026 星期五",
+      "location": "Japan-Sonoda",
+      "odds_type": "日本",
+      "stake": "40",
+      "tax": "$0.24",
+      "win_loss": "($32.64)",
+      "rd": "07-08-2026",
+      "type": "34J"
+    },
+    {
+      "date": "06 澳洲G 2026 星期四",
+      "location": "Isesaki-Japan (Auto)",
+      "odds_type": "日本",
+      "stake": "10",
+      "tax": "$0.06",
+      "win_loss": "($8.16)",
+      "rd": "06-08-2026",
+      "type": "409J"
+    },
+    {
+      "date": "04 澳洲G 2026 星期二",
+      "location": "Seibuen-Japan (Keirin)",
+      "odds_type": "日本",
+      "stake": "50",
+      "tax": "$0.37",
+      "win_loss": "($24.67)",
+      "rd": "04-08-2026",
+      "type": "399J"
+    }
+  ]
+}

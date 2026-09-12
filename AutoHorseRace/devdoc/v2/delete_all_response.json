@@ -1,0 +1,28 @@
+{
+  "success": true,
+  "message": "所有未证实交易删除成功",
+  "deleted": true,
+  "deleted_count": 1,
+  "attempted_count": 1,
+  "failed_count": 0,
+  "race_type": "36J",
+  "race_date": "15-08-2026",
+  "race_num": "5",
+  "pending": {
+    "bet": 1,
+    "eat": 0,
+    "total": 1
+  },
+  "results": [
+    {
+      "attempted": true,
+      "success": true,
+      "side": "BET",
+      "message": "取消未证实交易成功",
+      "http_status": 200,
+      "mr_params": "5,11,36J,15-08-2026,36J,5",
+      "response_preview": ""
+    }
+  ],
+  "username": "vcd888666"
+}

@@ -1,0 +1,42 @@
+﻿quant_pipeline/
+│── common.py        # 技术指标 / 解析函数 / 绘图
+│── dataset.py       # Dataset & ReplayBuffer
+│── model.py         # CNN+LSTM 网络
+│── train.py         # 增量训练主入口
+│── backtest.py      # 策略回测
+│── config.py        # 全局配置，比如路径、参数
+│── models/          # 保存的模型和loss
+		  cnn_lstm_model.pth              # 模型权重
+		  cnn_lstm_model_meta.json        # JSON 元数据
+		  training_loss_history.npy       # Loss 曲线
+		  training_loss_curve.png         # Loss 可视化
+│── hst_data/        # 存放历史数据
+
+说明（快速读）：
+config.py：常量与路径配置
+model.py：HybridCNNLSTM 网络
+dataset.py：KLineDataset 与 ReplayBuffer
+common.py：指标、HST 解析、重采样、绘图、评估等公用函数
+train.py：提供 offline（批量训练）和 online（实时流式增量训练）两种模式；包含 OnlineTrainer，会定期保存模型
+backtest.py：用训练好的模型做简单的逐根 K 线回测（基于模型预测的开/平仓，close-to-close PnL）
+
+行情流入 → 实时预测 → 保存预测 → 延迟回填真实价格 → 增量再训练模型
+
+Deploy issue
+ModuleNotFoundError: No module named 'pandas'
+已激活的虚拟环境 (venv) 中执行：
+pip install pandas -i https://pypi.org/simple
+
+ModuleNotFoundError: No module named 'torch'
+
+pip install pandas -i https://pypi.org/simple
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+pip install pyzmq
+pip install colorama
+pip install matplotlib
+python -m pip install sqlalchemy
+python -m pip install scikit-learn
+pip install mysql-connector-python
+
+
+

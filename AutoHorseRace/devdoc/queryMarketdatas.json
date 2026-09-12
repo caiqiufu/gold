@@ -1,0 +1,4096 @@
+/*
+  http: //localhost:8000/api/v1/query/market?username=vcd666888&rc=1&race_date=18-07-2026&race_type=14H
+*/
+
+{
+  "success": true,
+  "data": {
+    "username": "vcd888666",
+    "race_date": "09-08-2026",
+    "race_num": "8",
+    "confirmed_count": 0,
+    "confirmed_items": [],
+    "pending_count": 3,
+    "pending_items": [
+      {
+        "side": "B",
+        "mr_params": "168645656,3,0,09-08-2026,396J,8",
+        "race": "8",
+        "q_type": "Q",
+        "horses": "1-2",
+        "stake": "10",
+        "pct": "81",
+        "limit": "700",
+        "mode_str": "赌 (连赢)"
+      },
+      {
+        "side": "B",
+        "mr_params": "168645657,3,0,09-08-2026,396J,8",
+        "race": "8",
+        "q_type": "Q",
+        "horses": "1-3",
+        "stake": "10",
+        "pct": "81",
+        "limit": "700",
+        "mode_str": "赌 (连赢)"
+      },
+      {
+        "side": "B",
+        "mr_params": "168645655,3,0,09-08-2026,396J,8",
+        "race": "8",
+        "q_type": "Q",
+        "horses": "1-4",
+        "stake": "10",
+        "pct": "81",
+        "limit": "700",
+        "mode_str": "赌 (连赢)"
+      }
+    ],
+    "batch_delete_params": {
+      "batch_bet_mr": "8,11,396J,09-08-2026,396J,8",
+      "batch_eat_mr": ""
+    }
+  }
+}
+
+{
+  "success": true,
+  "data": {
+    "race_date": "18-07-2026",
+    "race_type": "14H",
+    "curr_rc": "1",
+    "quinella_list": [
+      {
+        "combo": "1-4",
+        "odds": "12.0",
+        "level": 2,
+        "type": "Q"
+      },
+      {
+        "combo": "1-5",
+        "odds": "25.0",
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "combo": "1-6",
+        "odds": "9.8",
+        "level": 2,
+        "type": "Q"
+      },
+      {
+        "combo": "1-7",
+        "odds": "3.6",
+        "level": 1,
+        "type": "Q"
+      },
+      {
+        "combo": "1-8",
+        "odds": "12.0",
+        "level": 2,
+        "type": "Q"
+      },
+      {
+        "combo": "2-5",
+        "odds": "56.0",
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "combo": "2-6",
+        "odds": "42.0",
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "combo": "2-7",
+        "odds": "10.0",
+        "level": 2,
+        "type": "Q"
+      },
+      {
+        "combo": "2-8",
+        "odds": "23.0",
+        "level": 3,
+        "type": "Q"
+      },
+      {
+        "combo": "3-6",
+        "odds": "71.0",
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "combo": "3-7",
+        "odds": "21.0",
+        "level": 3,
+        "type": "Q"
+      },
+      {
+        "combo": "3-8",
+        "odds": "52.0",
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "combo": "4-7",
+        "odds": "8.8",
+        "level": 2,
+        "type": "Q"
+      },
+      {
+        "combo": "4-8",
+        "odds": "30.0",
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "combo": "5-8",
+        "odds": "4.4",
+        "level": 1,
+        "type": "Q"
+      }
+    ],
+    "qplace_list": [],
+    "my_trades": [
+      {
+        "trade_id": "TX00CDC6BB7D04",
+        "combo": "1-2",
+        "trade_type": "BET",
+        "odds": "83",
+        "stake_amount": 10,
+        "status": "MATCHED",
+        "timestamp": "2026-07-18 20:04:02"
+      },
+      {
+        "trade_id": "TX00CDC6BB7D04",
+        "combo": "1-2",
+        "trade_type": "EAT",
+        "odds": "83",
+        "stake_amount": 10,
+        "status": "MATCHED",
+        "timestamp": "2026-07-18 20:04:02"
+      },
+      {
+        "trade_id": "TX805E610B8608",
+        "combo": "1-3",
+        "trade_type": "EAT",
+        "odds": "81",
+        "stake_amount": 30,
+        "status": "MATCHED",
+        "timestamp": "2026-07-18 20:04:02"
+      },
+      {
+        "trade_id": "TXA434D9E41C4E",
+        "combo": "1-5",
+        "trade_type": "BET",
+        "odds": "81",
+        "stake_amount": 44,
+        "status": "MATCHED",
+        "timestamp": "2026-07-18 20:04:02"
+      }
+    ],
+    "columns": {
+      "Q_BET": [
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "300",
+          "odds": "89",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "51",
+          "odds": "88",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "263",
+          "odds": "87",
+          "limit": "250"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "75",
+          "odds": "86",
+          "limit": "250"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "2000",
+          "odds": "83",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "6280",
+          "odds": "81",
+          "limit": "350"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "5",
+          "odds": "81",
+          "limit": "600"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "80",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "31",
+          "odds": "86",
+          "limit": "450"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "20",
+          "odds": "85",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "1875",
+          "odds": "82",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "6231",
+          "odds": "81",
+          "limit": "550"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "40",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "10",
+          "odds": "88",
+          "limit": "200"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "90",
+          "odds": "86",
+          "limit": "200"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "1000",
+          "odds": "83",
+          "limit": "300"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "2000",
+          "odds": "82",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "5820",
+          "odds": "81",
+          "limit": "250"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "31",
+          "odds": "81",
+          "limit": "450"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "40",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "385",
+          "odds": "92",
+          "limit": "100"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "490",
+          "odds": "92",
+          "limit": "150"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "540",
+          "odds": "92",
+          "limit": "200"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "2103",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "90",
+          "odds": "91",
+          "limit": "100"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "34",
+          "odds": "91",
+          "limit": "350"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "210",
+          "odds": "90",
+          "limit": "100"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "540",
+          "odds": "90",
+          "limit": "200"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "169",
+          "odds": "86",
+          "limit": "50"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "2000",
+          "odds": "82",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "61",
+          "odds": "81",
+          "limit": "600"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "1064",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "61",
+          "odds": "86",
+          "limit": "250"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "1000",
+          "odds": "83",
+          "limit": "300"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "2000",
+          "odds": "83",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "20",
+          "odds": "81",
+          "limit": "600"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "80",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "5832",
+          "odds": "81",
+          "limit": "700"
+        }
+      ],
+      "Q_EAT": [
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "1248",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "1064",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "4606",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "806",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "5556",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "15716",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "1162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-2",
+          "amount": "491",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "383",
+          "odds": "90",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "949",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "864",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "4406",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "806",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "3556",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "15697",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-3",
+          "amount": "491",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "1787",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "364",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "5206",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "806",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "5556",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "15216",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "1162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-4",
+          "amount": "491",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "287",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "5661",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "7346",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "9429",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "1162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "50062",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-5",
+          "amount": "6501",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "70",
+          "odds": "87",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "221",
+          "odds": "88",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "336",
+          "odds": "89",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "904",
+          "odds": "90",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "1961",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "1080",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "4866",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "706",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "5256",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "15816",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "1162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "1-6",
+          "amount": "491",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "6615",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "10",
+          "odds": "82",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "10",
+          "odds": "83",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "10",
+          "odds": "84",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "10",
+          "odds": "85",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "741",
+          "odds": "86",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "661",
+          "odds": "87",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "132",
+          "odds": "88",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "51",
+          "odds": "89",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "340",
+          "odds": "90",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "971",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "564",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "4436",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "906",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "2856",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "16296",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-3",
+          "amount": "491",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "40583",
+          "odds": "86",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "652",
+          "odds": "87",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "132",
+          "odds": "88",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "191",
+          "odds": "89",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "241",
+          "odds": "90",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "971",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "364",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "4636",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "906",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "3856",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "16057",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-4",
+          "amount": "491",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "7725",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "10",
+          "odds": "85",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "1808",
+          "odds": "86",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "661",
+          "odds": "87",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "262",
+          "odds": "88",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "121",
+          "odds": "89",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "471",
+          "odds": "90",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "1781",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "364",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "4756",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "806",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "5556",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "15837",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "1162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-5",
+          "amount": "491",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "7085",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "10",
+          "odds": "82",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "10",
+          "odds": "83",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "10",
+          "odds": "84",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "10",
+          "odds": "85",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "741",
+          "odds": "86",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "661",
+          "odds": "87",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "182",
+          "odds": "88",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "70",
+          "odds": "89",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "291",
+          "odds": "90",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "971",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "364",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "4636",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "806",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "4556",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "15446",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "2-6",
+          "amount": "491",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "868",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "10",
+          "odds": "82",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "10",
+          "odds": "83",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "10",
+          "odds": "84",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "10",
+          "odds": "85",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "741",
+          "odds": "86",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "661",
+          "odds": "87",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "132",
+          "odds": "88",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "51",
+          "odds": "89",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "331",
+          "odds": "90",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "971",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "564",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "4436",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "906",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "2856",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "15266",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-4",
+          "amount": "491",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "7222",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "10",
+          "odds": "82",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "10",
+          "odds": "83",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "10",
+          "odds": "84",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "10",
+          "odds": "85",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "741",
+          "odds": "86",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "661",
+          "odds": "87",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "192",
+          "odds": "88",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "80",
+          "odds": "89",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "441",
+          "odds": "90",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "1021",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "564",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "4406",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "806",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "5556",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "15067",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-5",
+          "amount": "491",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "7007",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "10",
+          "odds": "82",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "10",
+          "odds": "83",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "10",
+          "odds": "84",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "10",
+          "odds": "85",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "741",
+          "odds": "86",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "661",
+          "odds": "87",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "132",
+          "odds": "88",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "61",
+          "odds": "89",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "340",
+          "odds": "90",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "971",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "564",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "4436",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "806",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "2556",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "15326",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "3-6",
+          "amount": "491",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "2008",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "1",
+          "odds": "82",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "111",
+          "odds": "85",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "1901",
+          "odds": "86",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "630",
+          "odds": "87",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "281",
+          "odds": "88",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "130",
+          "odds": "89",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "670",
+          "odds": "90",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "1821",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "464",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "5356",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "806",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "5556",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "16116",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "1162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-5",
+          "amount": "491",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "554",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "10",
+          "odds": "82",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "4",
+          "odds": "83",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "10",
+          "odds": "84",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "10",
+          "odds": "85",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "741",
+          "odds": "86",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "661",
+          "odds": "87",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "132",
+          "odds": "88",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "70",
+          "odds": "89",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "241",
+          "odds": "90",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "971",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "364",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "4836",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "806",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "4556",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "15896",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "4-6",
+          "amount": "491",
+          "odds": "100",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "34247",
+          "odds": "81",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "10",
+          "odds": "82",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "12",
+          "odds": "84",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "10",
+          "odds": "85",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "722",
+          "odds": "86",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "640",
+          "odds": "87",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "372",
+          "odds": "88",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "209",
+          "odds": "89",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "1699",
+          "odds": "90",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "1931",
+          "odds": "91",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "474",
+          "odds": "92",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "4766",
+          "odds": "93",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "4706",
+          "odds": "94",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "5256",
+          "odds": "95",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "15366",
+          "odds": "96",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "1162",
+          "odds": "97",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "182",
+          "odds": "98",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "62",
+          "odds": "99",
+          "limit": "700"
+        },
+        {
+          "race": "1",
+          "combo": "5-6",
+          "amount": "501",
+          "odds": "100",
+          "limit": "700"
+        }
+      ],
+      "QP_BET": [
+        {
+          "race": "1",
+          "combo": "(1-5)",
+          "amount": "718",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-5)",
+          "amount": "33",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-5)",
+          "amount": "34",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-5)",
+          "amount": "34",
+          "odds": "90",
+          "limit": "400"
+        }
+      ],
+      "QP_EAT": [
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "56",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "15140",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-2)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "91",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "15201",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-3)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "91",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "14940",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-4)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-5)",
+          "amount": "14",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-5)",
+          "amount": "15600",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-5)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-5)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-5)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-5)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "53",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "14481",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(1-6)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "91",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "14441",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-3)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "91",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "15561",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-4)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "91",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "15210",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-5)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "56",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "14891",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(2-6)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "91",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "15201",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-4)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "91",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "14310",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-5)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "91",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "15260",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(3-6)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "91",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "15350",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-5)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "91",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "15170",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(4-6)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "91",
+          "odds": "81",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "10",
+          "odds": "83",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "10",
+          "odds": "84",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "10",
+          "odds": "85",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "10",
+          "odds": "86",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "10",
+          "odds": "87",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "10",
+          "odds": "88",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "10",
+          "odds": "89",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "10",
+          "odds": "90",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "10",
+          "odds": "91",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "10",
+          "odds": "92",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "44",
+          "odds": "93",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "44",
+          "odds": "94",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "44",
+          "odds": "95",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "15701",
+          "odds": "96",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "10",
+          "odds": "97",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "20",
+          "odds": "98",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "22",
+          "odds": "99",
+          "limit": "400"
+        },
+        {
+          "race": "1",
+          "combo": "(5-6)",
+          "amount": "30",
+          "odds": "100",
+          "limit": "400"
+        }
+      ]
+    }
+  }
+}

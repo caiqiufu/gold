@@ -1,0 +1,25 @@
+{
+  "success": true,
+  "message": "要求下注成功",
+  "data": {
+    "http_status": 200,
+    "race_type": "36J",
+    "race_date": "15-08-2026",
+    "race_num": "5",
+    "q_type": "QP",
+    "action": "BET",
+    "fctype": 1,
+    "horses": [
+      1,
+      5
+    ],
+    "combo": "1-5",
+    "amount": 85,
+    "tix": 10,
+    "response_preview": "",
+    "submitted": true,
+    "confirmed": true,
+    "message": "要求下注成功",
+    "username": "vcd888666"
+  }
+}

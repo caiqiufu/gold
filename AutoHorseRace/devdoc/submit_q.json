@@ -1,0 +1,19 @@
+{
+  "username": "vcd888666",
+  "race_type": "14H",
+  "race_date": "08-08-2026",
+  "race_num": "1",
+  "trade_type": "EAT",
+  "fctype": 0,
+  "horses": [
+    1,
+    6
+  ],
+  "tix": 10
+}
+
+
+{
+  "status": "success",
+  "message": "交易指令呈交成功"
+}

@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net472</TargetFramework>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+	</PropertyGroup>
+	<ItemGroup>
+		<Reference Include="FxServerAdapter">
+			<HintPath>dlls\FxServerAdapter.dll</HintPath>
+		</Reference>
+		<Reference Include="M4.Common">
+			<HintPath>dlls\M4.Common.dll</HintPath>
+		</Reference>
+		<Reference Include="M4.Core">
+			<HintPath>dlls\M4.Core.dll</HintPath>
+		</Reference>
+		<Reference Include="M4.IBroker">
+			<HintPath>dlls\M4.IBroker.dll</HintPath>
+		</Reference>
+		<Reference Include="M4.Interfaces">
+			<HintPath>dlls\M4.Interfaces.dll</HintPath>
+		</Reference>
+		<Reference Include="mFinance.Settings">
+			<HintPath>dlls\mFinance.Settings.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+	<ItemGroup>
+		<None Update="SUI_mF4.exe">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+</Project>

@@ -1,0 +1,50 @@
+<Accounts>
+<Account  IsDeleted = "False" ID = "ab9549b4-87b9-403c-b521-4a0da138c352" CurrencyID = "94f3b86b-51db-45d5-bc25-8386c7c8ecd8" Leverage = "" Version = "42" EstimateCloseCommission = "0" EstimateCloseLevy = "0" CustomerName = "»ÆÏÈÉú" IsMultiCurrency = "False" MinUpkeepEquity = "900.00" Type = "0" CurrencyCode = "RMB" Code = "05188" CreditAmount = "0.0000" RateMarginD = "1.0000" RateMarginO = "1.0000" RateMarginLockD = "1.0000" RateMarginLockO = "1.0000" TotalDeposit = "0" Balance = "50315.15" FrozenFund = "0.00" TradePLNotValued = "0" InterestPLNotValued = "0" StoragePLNotValued = "0" Necessary = "4500.00" NetNecessary = "0.00" HedgeNecessary = "4500.00" MinEquityAvoidRiskLevel1 = "3375.00" MinEquityAvoidRiskLevel2 = "2250.00" MinEquityAvoidRiskLevel3 = "900.00" NecessaryFillingOpenOrder = "4500.00" NecessaryFillingCloseOrder = "4500.00" TradePLFloat = "-341.30" InterestPLFloat = "0.00" StoragePLFloat = "0.00" ValueAsMargin = "0.0" LockOrderTradePLFloat = "0.0" FeeForCutting = "0.0" RiskCredit = "0.00" PartialPaymentPhysicalNecessary = "0.00" TotalPaidAmount = "0.0" Credit = "0" ShortMargin = "0" Equity = "49973.85" AlertLevel = "0" AlertTime = "" CutAlertLevel = "0" RealAlertLevel = "0" ActionType = "0" RequestID = "" LastResetDay = "2021-02-27 00:00:00" >
+<Funds>
+<Fund  IsDeleted = "False" CurrencyID = "94f3b86b-51db-45d5-bc25-8386c7c8ecd8" AccountID = "ab9549b4-87b9-403c-b521-4a0da138c352" CurrencyCode = "RMB" Equity = "49973.8500" TotalDeposit = "0" Balance = "50315.1500" FrozenFund = "0.0000000000000" TradePLNotValued = "0" InterestPLNotValued = "0" StoragePLNotValued = "0" Necessary = "4500.00" NetNecessary = "0.00000000" HedgeNecessary = "4500.0000000000" MinEquityAvoidRiskLevel1 = "3375.00" MinEquityAvoidRiskLevel2 = "2250.00" MinEquityAvoidRiskLevel3 = "900.00" NecessaryFillingOpenOrder = "4500.00" NecessaryFillingCloseOrder = "4500.00" TradePLFloat = "-341.30" InterestPLFloat = "0.00" StoragePLFloat = "0.00" ValueAsMargin = "0" LockOrderTradePLFloat = "0" FeeForCutting = "0" RiskCredit = "0.00000000" PartialPaymentPhysicalNecessary = "0.00000000" TotalPaidAmount = "0" Credit = "0" ShortMargin = "0" ></Fund>
+</Funds>
+<Transactions>
+<Transaction  IsDeleted = "False" PlacedByRiskMonitor = "False" FreePlacingPreCheck = "False" DisableLmtVariation = "False" ID = "df7dfa0b-7187-4ed1-8049-74fe18979fbb" Code = "DEM210219SP00014" Type = "0" AccountID = "ab9549b4-87b9-403c-b521-4a0da138c352" InstrumentID = "55f6a2b3-51a8-466a-99d2-45897bbf13fb" SubType = "0" Phase = "2" OrderType = "0" ContractSize = "100.0000" BeginTime = "2021-02-19 19:42:07" EndTime = "2021-02-19 19:42:37" ExpireType = "3" SubmitTime = "2021-02-19 19:42:07" SubmitorID = "186a1d8e-3de8-4b46-b47e-0c109de82f06" ExecuteTime = "2021-02-19 19:42:07" ApproverID = "00000000-0000-0000-0000-000000000000" AssigningOrderID = "" SetPriceTimestamp = "" InstrumentCategory = "10" AppType = "0" UpdateTime = "2021-02-28 05:21:54" CommissionFree = "False" ExecuteTradeDay = "2021-02-19 00:00:00" UpdatePersonID = "" Remark = "" >
+<Orders>
+<Order  IsDeleted = "False" BestTime = "" HitCount = "0" BestPrice = "" HitStatus = "0" ID = "e3fbdf23-7746-4ea1-b98d-259800f4074a" IsOpen = "True" IsBuy = "False" Lot = "0.5000" OriginalLot = "0.5000" LotBalance = "0.5000" InterestPerLot = "0.0000000000000" StoragePerLot = "0.0000000000000" MinLot = "" MaxShow = "" Code = "DEM2021021900016" OriginCode = "" BlotterCode = "" ExecutePrice = "1771.90" SetPrice = "1771.90" SetPrice2 = "" AutoLimitPrice = "" AutoStopPrice = "" PriceTimestamp = "" JudgePrice = "" JudgePriceTimestamp = "" InterestValueDate = "2021-02-19 00:00:00" SetPriceMaxMovePips = "0" DQMaxMove = "0" Phase = "2" TradeOption = "0" CANCELREASONID = "" CANCELREASONDESC = "" CancelReason = "" OrderBatchInstructionID = "" IsAutoFill = "False" EstimateCloseCommission = "0.0000" EstimateCloseLevy = "0.0000" InterestPLNotValued = "0" StoragePLNotValued = "0" TradePLNotValued = "0" IsLayout = "False" OriginLayoutOrderID = "" HasCode = "False" OrganizationCode = "" AccountCode = "" OfficialFixingRequestID = "" ShouldReset = "False" IsByPips = "False" CurrencyID = "767515e7-cfcc-4ba1-9684-659588c02e3e" InterestPLFloat = "0.00" StoragePLFloat = "0.00" TradePLFloat = "15023.40" LivePrice = "1728.10" >
+<Bills>
+<Bill  IsDeleted = "False" UpdateTime2 = "2021-02-19 19:42:07" ID = "2c2c0966-88b1-46da-b33c-e309236642e9" AccountID = "ab9549b4-87b9-403c-b521-4a0da138c352" Type = "2" OwnerType = "1" UpdateTime = "2021-02-19 19:42:07" Value = "0.0000000000000" AdjustmentType = "0" CurrencyID = "94f3b86b-51db-45d5-bc25-8386c7c8ecd8" ></Bill>
+<Bill  IsDeleted = "False" UpdateTime2 = "2021-02-19 19:42:07" ID = "33137a5b-0503-47a8-8258-c3d8543bbede" AccountID = "ab9549b4-87b9-403c-b521-4a0da138c352" Type = "1" OwnerType = "1" UpdateTime = "2021-02-19 19:42:07" Value = "-160.5000000000000" AdjustmentType = "0" CurrencyID = "94f3b86b-51db-45d5-bc25-8386c7c8ecd8" ></Bill>
+<Bill  IsDeleted = "False" UpdateTime2 = "2021-02-19 19:42:07" ID = "da424a45-1005-4f0e-9074-c7e2bc8cfb50" AccountID = "ab9549b4-87b9-403c-b521-4a0da138c352" Type = "40" OwnerType = "1" UpdateTime = "2021-02-19 19:42:07" Value = "0.0000000000000" AdjustmentType = "0" CurrencyID = "94f3b86b-51db-45d5-bc25-8386c7c8ecd8" ></Bill>
+</Bills>
+<OrderRelations>
+</OrderRelations>
+<OfficialFixingRequests>
+</OfficialFixingRequests></Order>
+</Orders></Transaction>
+<Transaction  IsDeleted = "False" PlacedByRiskMonitor = "False" FreePlacingPreCheck = "False" DisableLmtVariation = "False" ID = "3efd582a-c4d4-4bde-a109-b3200334a24b" Code = "DEM210219SP00015" Type = "0" AccountID = "ab9549b4-87b9-403c-b521-4a0da138c352" InstrumentID = "55f6a2b3-51a8-466a-99d2-45897bbf13fb" SubType = "0" Phase = "2" OrderType = "0" ContractSize = "100.0000" BeginTime = "2021-02-19 19:42:13" EndTime = "2021-02-19 19:42:43" ExpireType = "3" SubmitTime = "2021-02-19 19:42:13" SubmitorID = "186a1d8e-3de8-4b46-b47e-0c109de82f06" ExecuteTime = "2021-02-19 19:42:14" ApproverID = "00000000-0000-0000-0000-000000000000" AssigningOrderID = "" SetPriceTimestamp = "" InstrumentCategory = "10" AppType = "0" UpdateTime = "2021-02-28 05:21:54" CommissionFree = "False" ExecuteTradeDay = "2021-02-19 00:00:00" UpdatePersonID = "" Remark = "" >
+<Orders>
+<Order  IsDeleted = "False" BestTime = "" HitCount = "0" BestPrice = "" HitStatus = "0" ID = "8a9a30e4-0371-4241-afa3-f05c0cc2a368" IsOpen = "True" IsBuy = "True" Lot = "0.5000" OriginalLot = "0.5000" LotBalance = "0.5000" InterestPerLot = "0.0000000000000" StoragePerLot = "0.0000000000000" MinLot = "" MaxShow = "" Code = "DEM2021021900017" OriginCode = "" BlotterCode = "" ExecutePrice = "1772.20" SetPrice = "1772.20" SetPrice2 = "" AutoLimitPrice = "" AutoStopPrice = "" PriceTimestamp = "" JudgePrice = "" JudgePriceTimestamp = "" InterestValueDate = "2021-02-19 00:00:00" SetPriceMaxMovePips = "0" DQMaxMove = "0" Phase = "2" TradeOption = "0" CANCELREASONID = "" CANCELREASONDESC = "" CancelReason = "" OrderBatchInstructionID = "" IsAutoFill = "False" EstimateCloseCommission = "0.0000" EstimateCloseLevy = "0.0000" InterestPLNotValued = "0" StoragePLNotValued = "0" TradePLNotValued = "0" IsLayout = "False" OriginLayoutOrderID = "" HasCode = "False" OrganizationCode = "" AccountCode = "" OfficialFixingRequestID = "" ShouldReset = "False" IsByPips = "False" CurrencyID = "767515e7-cfcc-4ba1-9684-659588c02e3e" InterestPLFloat = "0.00" StoragePLFloat = "0.00" TradePLFloat = "-15364.70" LivePrice = "1727.60" >
+<Bills>
+<Bill  IsDeleted = "False" UpdateTime2 = "2021-02-19 19:42:14" ID = "d9f2034d-a9cf-4078-9865-821a9e7bfdb1" AccountID = "ab9549b4-87b9-403c-b521-4a0da138c352" Type = "2" OwnerType = "1" UpdateTime = "2021-02-19 19:42:14" Value = "0.0000000000000" AdjustmentType = "0" CurrencyID = "94f3b86b-51db-45d5-bc25-8386c7c8ecd8" ></Bill>
+<Bill  IsDeleted = "False" UpdateTime2 = "2021-02-19 19:42:14" ID = "968bf8a9-62f9-434d-8c85-de7ffdc08300" AccountID = "ab9549b4-87b9-403c-b521-4a0da138c352" Type = "40" OwnerType = "1" UpdateTime = "2021-02-19 19:42:14" Value = "0.0000000000000" AdjustmentType = "0" CurrencyID = "94f3b86b-51db-45d5-bc25-8386c7c8ecd8" ></Bill>
+<Bill  IsDeleted = "False" UpdateTime2 = "2021-02-19 19:42:14" ID = "4a965371-79bb-4cb6-8244-502c8372ecdc" AccountID = "ab9549b4-87b9-403c-b521-4a0da138c352" Type = "1" OwnerType = "1" UpdateTime = "2021-02-19 19:42:14" Value = "-160.5000000000000" AdjustmentType = "0" CurrencyID = "94f3b86b-51db-45d5-bc25-8386c7c8ecd8" ></Bill>
+</Bills>
+<OrderRelations>
+</OrderRelations>
+<OfficialFixingRequests>
+</OfficialFixingRequests></Order>
+</Orders></Transaction>
+</Transactions>
+<DeliveryRequests>
+</DeliveryRequests>
+<ResetOrders>
+</ResetOrders>
+<Balances>
+</Balances>
+<Bills>
+</Bills>
+<Vouchers>
+</Vouchers>
+<Deposits>
+</Deposits>
+<Instruments>
+<Instrument  IsDeleted = "False" LastResetDay = "2021-02-27 00:00:00" ID = "55f6a2b3-51a8-466a-99d2-45897bbf13fb" AccountID = "ab9549b4-87b9-403c-b521-4a0da138c352" >
+<ResetItemHistory>
+</ResetItemHistory></Instrument>
+</Instruments></Account></Accounts>

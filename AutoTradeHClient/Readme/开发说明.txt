@@ -1,0 +1,6 @@
+﻿1.MT4 API升级
+1)通过Skype联系Tim ，获取最新的升级包，MT4ServerAPI.dll  MT4ServerApi.xml
+2)替换文件，E:\OneDrive\07-svn\01-gold\uClient\mT4Packages
+2.通过nuget安装包
+1) Tools->NuGet Package Managementer->Managementer NuGet Package for Solution->Browser
+2) 根据名字搜索SDK，选择project，点击install

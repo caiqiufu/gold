@@ -1,0 +1,50 @@
+﻿{
+  "PublishAddressOEC": "tcp://18.162.55.209:5556",
+  "PublishAddressT4": "tcp://13.248.189.116:5558",
+  "PublishAddressV4": "tcp://10.16.35.47:5552",
+  "DSType": "T4",
+  "PlatformList": [
+    {
+      "Platform": 1,
+      "PlatformName": "MT4",
+      "AutoLock": true,
+      "TradePara": {
+        "SellOpen": 8.0,
+        "BuyOpen": 8.0,
+        "SellClose": 8.0,
+        "BuyClose": 8.0,
+        "SellLots": 0.1,
+        "BuyLots": 0.1,
+        "Slippage": 35,
+        "Stoploss": 0.0,
+        "AutoLockPoint": 0.0,
+        "AutoLockTimeDuration": 3000.0,
+        "AutoCloseTimeDuration": "无限制",
+        "AutoChecked": false
+      },
+      "Broker": [
+        {
+          "BrokerName": "百利好",
+          "PlatForm": 2,
+          "PlatFormName": "MT4",
+          "DefaultAccount": "Live",
+          "DefaultSymbol": "GOLD",
+          "Account": [],
+          "DefaultDemoAccount": {
+            "Type": "Live",
+            "UserCode": "57599663",
+            "Password": "led369369",
+            "Symbol": "GOLD"
+          },
+          "DefaultLiveAccount": {
+            "Type": "Demo",
+            "UserCode": "44451803",
+            "Password": "dvg5mvc",
+            "Symbol": "GOLD"
+          }
+        }
+      ],
+      "DefaultBroker": ""
+    }
+  ]
+}

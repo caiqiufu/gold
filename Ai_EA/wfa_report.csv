@@ -1,0 +1,7 @@
+model,threshold,lambda,score
+quant_pipeline/models/transformer_model.pt,0.4,0.5,0.22778604601760621
+quant_pipeline/models/transformer_model.pt,0.4,1.0,0.055446403311441905
+quant_pipeline/models/transformer_model.pt,0.5,0.5,0.17924630778950723
+quant_pipeline/models/transformer_model.pt,0.5,1.0,0.07080834588800677
+quant_pipeline/models/transformer_model.pt,0.6,0.5,0.4173936670443258
+quant_pipeline/models/transformer_model.pt,0.6,1.0,0.5635298677888324

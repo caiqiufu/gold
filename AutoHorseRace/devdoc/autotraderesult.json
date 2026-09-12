@@ -1,0 +1,58 @@
+{
+  "success": true,
+  "result": {
+    "success": true,
+    "executed_count": 4,
+    "details": [
+      {
+        "col_name": "Q_EAT",
+        "combo": "1-2",
+        "stake_amount": 10,
+        "trade_type": "BET",
+        "status": "SUCCESS",
+        "info": "已成功下注"
+      },
+      {
+        "col_name": "Q_BET",
+        "combo": "1-2",
+        "stake_amount": 10,
+        "trade_type": "EAT",
+        "status": "SUCCESS",
+        "info": "已成功吃注"
+      },
+      {
+        "col_name": "Q_BET",
+        "combo": "1-3",
+        "stake_amount": 10,
+        "trade_type": "EAT",
+        "status": "SUCCESS",
+        "info": "已成功吃注"
+      }
+    ],
+    "message": "自动化对冲流程执行成功"
+  }
+}
+
+
+{
+  "username": "vcd888666",
+  "race_type": "14H",
+  "race_date": "25-07-2026",
+  "stake_amount": 10,
+  "market_data": {},
+  "trade_targets": [
+    {
+      "col_name": "Q_EAT",
+      "combo": "1-2",
+      "fctype": "0",
+      "limit": "700",
+      "odds": "81",
+      "race": "1",
+      "stake_amount": 10,
+      "trade_type": "BET"
+    }
+  ]
+}
+
+
+Total ticket value per race exceeded. Contact agent for limit increase. Available tickets value: $0

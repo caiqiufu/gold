@@ -1,0 +1,2 @@
+﻿1.An unhandled exception of type 'System.IO.FileLoadException' occurred in NetMQ.dll 
+解决方案：1)检查是否存在该包, Project->右键,NuGet,Browse, 检查NetMQ是否安装

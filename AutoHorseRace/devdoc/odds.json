@@ -1,0 +1,643 @@
+http://localhost:8000/api/v1/query/odds-tables?username=vcd666888&rc=1&race_date=18-07-2026&race_type=14H
+{
+  "success": true,
+  "data": {
+    "race_date": "17-07-2026",
+    "race_type": "49A",
+    "curr_rc": "1",
+    "quinella_data": [
+      {
+        "horse1": 1,
+        "horse2": 4,
+        "odds": 115.7,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 1,
+        "horse2": 5,
+        "odds": 303.3,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 1,
+        "horse2": 6,
+        "odds": 752.5,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 1,
+        "horse2": 7,
+        "odds": 32.3,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 1,
+        "horse2": 8,
+        "odds": 514.9,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 1,
+        "horse2": 9,
+        "odds": 207,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 1,
+        "horse2": 10,
+        "odds": 101.2,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 1,
+        "horse2": 11,
+        "odds": 99.7,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 1,
+        "horse2": 12,
+        "odds": 67.6,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 2,
+        "horse2": 5,
+        "odds": 78.9,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 2,
+        "horse2": 6,
+        "odds": 186.8,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 2,
+        "horse2": 7,
+        "odds": 9.9,
+        "level": 2,
+        "type": "Q"
+      },
+      {
+        "horse1": 2,
+        "horse2": 8,
+        "odds": 288.8,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 2,
+        "horse2": 9,
+        "odds": 49.3,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 2,
+        "horse2": 10,
+        "odds": 41.2,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 2,
+        "horse2": 11,
+        "odds": 77.4,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 2,
+        "horse2": 12,
+        "odds": 20.6,
+        "level": 3,
+        "type": "Q"
+      },
+      {
+        "horse1": 3,
+        "horse2": 6,
+        "odds": 501.7,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 3,
+        "horse2": 7,
+        "odds": 25.5,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 3,
+        "horse2": 8,
+        "odds": 547.3,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 3,
+        "horse2": 9,
+        "odds": 172.7,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 3,
+        "horse2": 10,
+        "odds": 95.2,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 3,
+        "horse2": 11,
+        "odds": 218,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 3,
+        "horse2": 12,
+        "odds": 56.3,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 4,
+        "horse2": 7,
+        "odds": 11.2,
+        "level": 2,
+        "type": "Q"
+      },
+      {
+        "horse1": 4,
+        "horse2": 8,
+        "odds": 621.1,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 4,
+        "horse2": 9,
+        "odds": 138.2,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 4,
+        "horse2": 10,
+        "odds": 216.2,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 4,
+        "horse2": 11,
+        "odds": 474.3,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 4,
+        "horse2": 12,
+        "odds": 99.4,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 5,
+        "horse2": 8,
+        "odds": 133.5,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 5,
+        "horse2": 9,
+        "odds": 10.9,
+        "level": 2,
+        "type": "Q"
+      },
+      {
+        "horse1": 5,
+        "horse2": 10,
+        "odds": 11.6,
+        "level": 2,
+        "type": "Q"
+      },
+      {
+        "horse1": 5,
+        "horse2": 11,
+        "odds": 21.8,
+        "level": 3,
+        "type": "Q"
+      },
+      {
+        "horse1": 5,
+        "horse2": 12,
+        "odds": 4.4,
+        "level": 1,
+        "type": "Q"
+      },
+      {
+        "horse1": 6,
+        "horse2": 9,
+        "odds": 387.4,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 6,
+        "horse2": 10,
+        "odds": 346.3,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 6,
+        "horse2": 11,
+        "odds": 492.2,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 6,
+        "horse2": 12,
+        "odds": 238.6,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 7,
+        "horse2": 10,
+        "odds": 17.9,
+        "level": 3,
+        "type": "Q"
+      },
+      {
+        "horse1": 7,
+        "horse2": 11,
+        "odds": 137.5,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 7,
+        "horse2": 12,
+        "odds": 39.1,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 8,
+        "horse2": 9,
+        "odds": 55.8,
+        "level": 0,
+        "type": "Q"
+      },
+      {
+        "horse1": 8,
+        "horse2": 10,
+        "odds": 9.4,
+        "level": 2,
+        "type": "Q"
+      },
+      {
+        "horse1": 9,
+        "horse2": 10,
+        "odds": 39.5,
+        "level": 0,
+        "type": "Q"
+      }
+    ],
+    "qplace_data": [
+      {
+        "horse1": 1,
+        "horse2": 4,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 1,
+        "horse2": 5,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 1,
+        "horse2": 6,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 1,
+        "horse2": 7,
+        "odds": 1.4,
+        "level": 1,
+        "type": "QP"
+      },
+      {
+        "horse1": 1,
+        "horse2": 8,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 1,
+        "horse2": 9,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 1,
+        "horse2": 10,
+        "odds": 13.7,
+        "level": 2,
+        "type": "QP"
+      },
+      {
+        "horse1": 1,
+        "horse2": 11,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 1,
+        "horse2": 12,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 2,
+        "horse2": 5,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 2,
+        "horse2": 6,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 2,
+        "horse2": 7,
+        "odds": 4.1,
+        "level": 1,
+        "type": "QP"
+      },
+      {
+        "horse1": 2,
+        "horse2": 8,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 2,
+        "horse2": 9,
+        "odds": 17.4,
+        "level": 3,
+        "type": "QP"
+      },
+      {
+        "horse1": 2,
+        "horse2": 10,
+        "odds": 9.4,
+        "level": 2,
+        "type": "QP"
+      },
+      {
+        "horse1": 2,
+        "horse2": 11,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 2,
+        "horse2": 12,
+        "odds": 9.1,
+        "level": 2,
+        "type": "QP"
+      },
+      {
+        "horse1": 3,
+        "horse2": 6,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 3,
+        "horse2": 7,
+        "odds": 5.8,
+        "level": 1,
+        "type": "QP"
+      },
+      {
+        "horse1": 3,
+        "horse2": 8,
+        "odds": 199,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 3,
+        "horse2": 9,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 3,
+        "horse2": 10,
+        "odds": 19,
+        "level": 3,
+        "type": "QP"
+      },
+      {
+        "horse1": 3,
+        "horse2": 11,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 3,
+        "horse2": 12,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 4,
+        "horse2": 7,
+        "odds": 6.7,
+        "level": 1,
+        "type": "QP"
+      },
+      {
+        "horse1": 4,
+        "horse2": 8,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 4,
+        "horse2": 9,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 4,
+        "horse2": 10,
+        "odds": 18.7,
+        "level": 3,
+        "type": "QP"
+      },
+      {
+        "horse1": 4,
+        "horse2": 11,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 4,
+        "horse2": 12,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 5,
+        "horse2": 8,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 5,
+        "horse2": 9,
+        "odds": 5.6,
+        "level": 1,
+        "type": "QP"
+      },
+      {
+        "horse1": 5,
+        "horse2": 10,
+        "odds": 3.8,
+        "level": 1,
+        "type": "QP"
+      },
+      {
+        "horse1": 5,
+        "horse2": 11,
+        "odds": 6,
+        "level": 1,
+        "type": "QP"
+      },
+      {
+        "horse1": 5,
+        "horse2": 12,
+        "odds": 2.8,
+        "level": 1,
+        "type": "QP"
+      },
+      {
+        "horse1": 6,
+        "horse2": 9,
+        "odds": 199,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 6,
+        "horse2": 10,
+        "odds": 27.8,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 6,
+        "horse2": 11,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 6,
+        "horse2": 12,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 7,
+        "horse2": 10,
+        "odds": 13.7,
+        "level": 2,
+        "type": "QP"
+      },
+      {
+        "horse1": 7,
+        "horse2": 11,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      },
+      {
+        "horse1": 7,
+        "horse2": 12,
+        "odds": 13.2,
+        "level": 2,
+        "type": "QP"
+      },
+      {
+        "horse1": 8,
+        "horse2": 9,
+        "odds": 12,
+        "level": 2,
+        "type": "QP"
+      },
+      {
+        "horse1": 8,
+        "horse2": 10,
+        "odds": 7.8,
+        "level": 2,
+        "type": "QP"
+      },
+      {
+        "horse1": 9,
+        "horse2": 10,
+        "odds": 30,
+        "level": 0,
+        "type": "QP"
+      }
+    ]
+  }
+}

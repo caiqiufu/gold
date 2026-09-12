@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0" xmlns:asmv2="urn:schemas-microsoft-com:asm.v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:schemas-microsoft-com:asm.v1 assembly.adaptive.xsd">
+  <assemblyIdentity name="ICSharpCode.SharpZipLib" processorArchitecture="msil" publicKeyToken="1B03E6ACF1164F73" version="0.86.0.518" />
+  <file name="ICSharpCode.SharpZipLib.dll" />
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity name="mscorlib" publicKeyToken="b77a5c561934e089" version="2.0.0.0" />
+    </dependentAssembly>
+  </dependency>
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity name="System" publicKeyToken="b77a5c561934e089" version="2.0.0.0" />
+    </dependentAssembly>
+  </dependency>
+</assembly>
