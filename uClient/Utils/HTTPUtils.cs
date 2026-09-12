@@ -1,19 +1,17 @@
-﻿using NLog;
-using System.Net.Http;
-using System.Text;
-using System.Web;
-using System;
-using System.Collections.Generic;
-using Tea;
+﻿using HtmlAgilityPack;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System.Text.RegularExpressions;
-using M4.StockChartX;
-using HtmlAgilityPack;
-using System.Linq;
+using NLog;
+using System;
+using System.Collections.Generic;
 using System.IO;
-using DocumentFormat.OpenXml.Drawing.Charts;
+using System.Linq;
 using System.Net;
+using System.Net.Http;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Web;
+using Tea;
 
 namespace uClient.Comm
 {
@@ -43,7 +41,7 @@ namespace uClient.Comm
             };
 
             string payload = JsonConvert.SerializeObject(payloadObj);
-            return SendSyncRequest(url, "POST", headers,null, payload);
+            return SendSyncRequest(url, "POST", headers, null, payload);
         }
 
         /// <summary>
@@ -74,12 +72,12 @@ namespace uClient.Comm
             string[] result = generator.GenerateTimestampAndKey("index/jrdkcc").Split(',');
             long timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds();
             string url = "https://datacenter-api.jin10.com/sentiment/list";
-            (string Key, string Value)[] parameters = new[] {(category, sort) };
+            (string Key, string Value)[] parameters = new[] { (category, sort) };
             (string Key, string Value)[] headers = new[] { ("authority", "datacenter-api.jin10.com"),
                 ("method","GET"),("path","/sentiment/list?_=" + timestamp),("origin","https://datacenter.jin10.com"),("x-app-id","rU6QIu7JHe2gOUeR"),
                 ("x-version","1.0.0")  };
 
-            return SendSyncRequest(url.ToString(), "GET", headers,parameters);
+            return SendSyncRequest(url.ToString(), "GET", headers, parameters);
         }
         /// <summary>
         /// 获取Dukascopy情绪指数数据
@@ -164,8 +162,8 @@ namespace uClient.Comm
         */
         public static string sendSMSByAliyun(string[] noumbers, string content)
         {
-            string accessKeyId = "LTAI4GAU6dX9U3ZfncJvK3fV";
-            string accessKeySecret = "2ySJ8WYdkk45VogXQSTrRixxjl8hs8";
+            string accessKeyId = "";
+            string accessKeySecret = "";
             AlibabaCloud.SDK.Dysmsapi20170525.Client client = CreateClient(accessKeyId, accessKeySecret);
             AlibabaCloud.SDK.Dysmsapi20170525.Models.SendSmsRequest sendSmsRequest = new AlibabaCloud.SDK.Dysmsapi20170525.Models.SendSmsRequest
             {
@@ -235,7 +233,7 @@ namespace uClient.Comm
         public static string HorseGetToken(string userCode, string password)
         {
             string url = "https://api.ma288.com/members/oauth/token";
-            string payload = "grant_type=password&username="+ userCode + "&password="+ password + "&d=0.9503883153227932";
+            string payload = "grant_type=password&username=" + userCode + "&password=" + password + "&d=0.9503883153227932";
 
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
             request.Method = "POST";
@@ -328,26 +326,27 @@ namespace uClient.Comm
                 writer.Write(payload);
             }
 
-            try 
+            try
             {
                 using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
                 using (StreamReader reader = new StreamReader(response.GetResponseStream()))
                 {
                     string html = reader.ReadToEnd();
-                    return ExtractBetDataList(html);                                      
+                    return ExtractBetDataList(html);
                 }
-            } catch (Exception e) 
+            }
+            catch (Exception e)
             {
                 _logger.Error(e.Message);
             }
-            return null;  
+            return null;
         }
         /// <summary>
         /// 返回数据中,0为最新数据
         /// </summary>
         /// <param name="html"></param>
         /// <returns></returns>
-        public static List<List<string>> ExtractBetDataList(string html) 
+        public static List<List<string>> ExtractBetDataList(string html)
         {
             if (!string.IsNullOrEmpty(html))
             {
