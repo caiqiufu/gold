@@ -591,7 +591,7 @@ namespace AutoHorseRace.Utils
         {
             var sqlQueryStr = new StringBuilder();
             // 🚀 优化点：改用范围查询，让数据库能够精准走 create_time 字段的索引，避免全表扫描
-            sqlQueryStr.AppendFormat(@"SELECT * FROM hr_trade_detail WHERE trade_record_id = '{0}'", tradeRecordId);
+            sqlQueryStr.AppendFormat(@"SELECT * FROM hr_trade_detail WHERE trade_record_id = '{0}' order by action, create_time", tradeRecordId);
             List<IDictionary<string, string>> datas = DBUtils.eaQuery(sqlQueryStr.ToString());
             if (datas != null && datas.Count > 0)
             {
@@ -659,97 +659,209 @@ namespace AutoHorseRace.Utils
         /// <summary>
         /// 查询自动下注状态列表
         /// </summary>
-        /// <param name="accountCode"></param>
-        /// <param name="raceType"></param>
-        /// <param name="raceDate"></param>
-        /// <param name="raceNo"></param>
-        /// <param name="combo"></param>
-        /// <returns></returns>
-        public static List<BetInfo> queryAutoBettingStatusList(string accountCode, string raceType, string raceDate, string raceNo, string combos)
+        /// <param name="accountCode">账号</param>
+        /// <param name="raceType">赛事类型</param>
+        /// <param name="raceDate">赛事日期</param>
+        /// <param name="raceNo">场次，0 表示全部</param>
+        /// <param name="combos">组合，支持 "2-11" 或 "1-2,2-3,2-11"</param>
+        /// <returns>自动下注状态列表</returns>
+        public static List<BetInfo> queryAutoBettingStatusList(
+            string accountCode,
+            string raceType,
+            string raceDate,
+            string raceNo,
+            string combos)
         {
             var sqlQueryStr = new StringBuilder();
-            // 💡 终极防冲突写法：所有字段显式起别名，彻底避开底层 Dictionary Key 重复报错
-            sqlQueryStr.AppendFormat(@"SELECT 
-                            d.id AS detail_id, 
-                            d.trade_record_id AS d_trade_record_id, 
-                            d.type AS detail_type, 
-                            d.combo AS detail_combo, 
-                            d.odds AS detail_odds, 
-                            d.toto AS detail_toto, 
-                            d.limit_amount AS detail_limit, 
-                            d.stake_amount AS detail_stake, 
-                            d.action AS detail_action, 
-                            d.status AS detail_status, 
-                            d.timestamp AS detail_timestamp, 
-                            d.remark AS detail_remark, 
-                            r.id AS record_id,
-                            r.race_date AS record_race_date, 
-                            r.race_no AS record_race_no, 
-                            r.race_type AS record_race_type,
-                            r.account_code AS record_account_code
-                       FROM hr_trade_detail d 
-                       INNER JOIN hr_trade_record r ON d.trade_record_id = r.id 
-                       WHERE r.account_code = '{0}' 
-                         and r.race_date = '{1}' 
-                         and r.race_type = '{2}'",
-                        accountCode, raceDate, raceType);
-            // 动态拼接 raceNo 条件
-            if (!string.IsNullOrEmpty(raceNo) && raceNo != "0")
+
+            // ============================================================
+            // 1. 基础 SQL
+            // ============================================================
+            sqlQueryStr.AppendFormat(@"
+        SELECT 
+            d.id AS detail_id, 
+            d.trade_record_id AS d_trade_record_id, 
+            d.type AS detail_type, 
+            d.combo AS detail_combo, 
+            d.odds AS detail_odds, 
+            d.toto AS detail_toto, 
+            d.limit_amount AS detail_limit, 
+            d.stake_amount AS detail_stake, 
+            d.action AS detail_action, 
+            d.status AS detail_status, 
+            d.timestamp AS detail_timestamp, 
+            d.remark AS detail_remark, 
+
+            r.id AS record_id,
+            r.race_date AS record_race_date, 
+            r.race_no AS record_race_no, 
+            r.race_type AS record_race_type,
+            r.account_code AS record_account_code
+
+        FROM hr_trade_detail d
+
+        INNER JOIN hr_trade_record r 
+            ON d.trade_record_id = r.id
+
+        WHERE r.account_code = '{0}'
+          AND r.race_date = '{1}'
+          AND r.race_type = '{2}'",
+                accountCode,
+                raceDate,
+                raceType);
+
+            // ============================================================
+            // 2. Race No 条件
+            // ============================================================
+            if (!string.IsNullOrWhiteSpace(raceNo) && raceNo != "0")
             {
-                sqlQueryStr.AppendFormat(" and r.race_no = '{0}'", raceNo);
+                sqlQueryStr.AppendFormat(
+                    " AND r.race_no = '{0}'",
+                    raceNo.Trim());
             }
-            // 💡 动态解析逗号分隔的 combo 参数（支持 "1-2,2-3" 等格式）
-            if (!string.IsNullOrEmpty(combos))
+
+            // ============================================================
+            // 3. Combo 条件
+            //
+            // 支持：
+            // 2-11
+            //
+            // 或：
+            // 1-2,2-3,2-11
+            //
+            // 使用精确匹配 IN。
+            // ============================================================
+            if (!string.IsNullOrWhiteSpace(combos))
             {
-                var comboList = combos.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                                     .Select(c => c.Trim())
-                                     .Where(c => !string.IsNullOrEmpty(c))
-                                     .ToList();
+                var comboList = combos
+                    .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(c => c.Trim())
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
                 if (comboList.Count > 0)
                 {
-                    // 方案 A：如果要求【精确匹配】其中的任意一个 combo，推荐使用 IN 语句（性能更好、更安全）
-                    var escapedCombos = comboList.Select(c => $"'{c}'");
-                    sqlQueryStr.AppendFormat(" and d.combo IN ({0})", string.Join(",", escapedCombos));
-                    /* 方案 B：如果依然需要【模糊匹配】每一个项，可以使用多个 OR LIKE：
-                    var likeConditions = comboList.Select(c => $"d.combo LIKE '%{c}%'");
-                    sqlQueryStr.AppendFormat(" and ({0})", string.Join(" OR ", likeConditions));
-                    */
+                    var escapedCombos = comboList
+                        .Select(c => "'" + c.Replace("'", "''") + "'")
+                        .ToList();
+
+                    sqlQueryStr.AppendFormat(
+                        " AND d.combo IN ({0})",
+                        string.Join(",", escapedCombos));
                 }
             }
-            List<IDictionary<string, string>> datas = DBUtils.eaQuery(sqlQueryStr.ToString());
+
+            // ============================================================
+            // 4. ORDER BY 必须放在所有 WHERE 条件之后
+            // ============================================================
+            sqlQueryStr.Append(
+                " ORDER BY d.combo, d.action, d.create_time");
+
+            // ============================================================
+            // 5. 执行查询
+            // ============================================================
+            List<IDictionary<string, string>> datas =
+                DBUtils.eaQuery(sqlQueryStr.ToString());
+
             if (datas != null && datas.Count > 0)
             {
                 List<BetInfo> bettingInfos = new List<BetInfo>();
+
                 foreach (var dataItem in datas)
                 {
-                    // 安全解析数值类型
-                    double.TryParse(dataItem.ContainsKey("detail_toto") ? dataItem["detail_toto"] : "0", out double parsedToto);
-                    double.TryParse(dataItem.ContainsKey("detail_stake") ? dataItem["detail_stake"] : "0", out double parsedStakeAmount);
-                    double.TryParse(dataItem.ContainsKey("detail_odds") ? dataItem["detail_odds"] : "0", out double parsedOdds);
-                    double.TryParse(dataItem.ContainsKey("detail_limit") ? dataItem["detail_limit"] : "0", out double parsedLimit);
+                    // ====================================================
+                    // 安全解析数值
+                    // ====================================================
+                    double.TryParse(
+                        dataItem.ContainsKey("detail_toto")
+                            ? dataItem["detail_toto"]
+                            : "0",
+                        out double parsedToto);
+
+                    double.TryParse(
+                        dataItem.ContainsKey("detail_stake")
+                            ? dataItem["detail_stake"]
+                            : "0",
+                        out double parsedStakeAmount);
+
+                    double.TryParse(
+                        dataItem.ContainsKey("detail_odds")
+                            ? dataItem["detail_odds"]
+                            : "0",
+                        out double parsedOdds);
+
+                    double.TryParse(
+                        dataItem.ContainsKey("detail_limit")
+                            ? dataItem["detail_limit"]
+                            : "0",
+                        out double parsedLimit);
+
+                    // ====================================================
+                    // BetInfo
+                    // ====================================================
                     BetInfo betInfo = new BetInfo
                     {
-                        seq = dataItem.ContainsKey("detail_id") ? dataItem["detail_id"] : string.Empty,
-                        tradeRecordId = dataItem.ContainsKey("d_trade_record_id") ? dataItem["d_trade_record_id"] : string.Empty,
-                        raceDate = dataItem.ContainsKey("record_race_date") ? dataItem["record_race_date"] : string.Empty,
-                        raceType = dataItem.ContainsKey("record_race_type") ? dataItem["record_race_type"] : string.Empty,
-                        raceNo = dataItem.ContainsKey("record_race_no") ? dataItem["record_race_no"] : string.Empty,
-                        type = dataItem.ContainsKey("detail_type") ? dataItem["detail_type"] : string.Empty,
-                        combo = dataItem.ContainsKey("detail_combo") ? dataItem["detail_combo"] : string.Empty,
+                        seq = dataItem.ContainsKey("detail_id")
+                            ? dataItem["detail_id"]
+                            : string.Empty,
+
+                        tradeRecordId = dataItem.ContainsKey("d_trade_record_id")
+                            ? dataItem["d_trade_record_id"]
+                            : string.Empty,
+
+                        raceDate = dataItem.ContainsKey("record_race_date")
+                            ? dataItem["record_race_date"]
+                            : string.Empty,
+
+                        raceType = dataItem.ContainsKey("record_race_type")
+                            ? dataItem["record_race_type"]
+                            : string.Empty,
+
+                        raceNo = dataItem.ContainsKey("record_race_no")
+                            ? dataItem["record_race_no"]
+                            : string.Empty,
+
+                        type = dataItem.ContainsKey("detail_type")
+                            ? dataItem["detail_type"]
+                            : string.Empty,
+
+                        combo = dataItem.ContainsKey("detail_combo")
+                            ? dataItem["detail_combo"]
+                            : string.Empty,
+
                         odds = (int)parsedOdds,
+
                         toto = parsedToto,
+
                         limit = (int)parsedLimit,
+
                         stakeAmount = (int)parsedStakeAmount,
-                        action = dataItem.ContainsKey("detail_action") ? dataItem["detail_action"] : string.Empty,
-                        status = dataItem.ContainsKey("detail_status") ? dataItem["detail_status"] : string.Empty,
-                        timestamp = dataItem.ContainsKey("detail_timestamp") ? dataItem["detail_timestamp"] : string.Empty,
-                        remark = dataItem.ContainsKey("detail_remark") ? dataItem["detail_remark"] : string.Empty,
+
+                        action = dataItem.ContainsKey("detail_action")
+                            ? dataItem["detail_action"]
+                            : string.Empty,
+
+                        status = dataItem.ContainsKey("detail_status")
+                            ? dataItem["detail_status"]
+                            : string.Empty,
+
+                        timestamp = dataItem.ContainsKey("detail_timestamp")
+                            ? dataItem["detail_timestamp"]
+                            : string.Empty,
+
+                        remark = dataItem.ContainsKey("detail_remark")
+                            ? dataItem["detail_remark"]
+                            : string.Empty,
                     };
+
                     bettingInfos.Add(betInfo);
                 }
+
                 return bettingInfos;
             }
-            return null;
+
+            return new List<BetInfo>();
         }
         /// <summary>
         /// 获取下注信息,不判断是否完全平仓

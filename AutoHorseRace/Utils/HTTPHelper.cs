@@ -807,6 +807,8 @@ namespace AutoHorseRace.Utils
                 serverProcessTime = "local_file";
             }
 
+            // 🔧 这里判断的是"HTTP 请求本身没有正确完成"（连接层直接报错、返回的不是合法响应体），
+            // 属于真正的网络/传输层异常，跟"服务器已正常处理但业务上拒绝"是两回事，继续返回 null 是合理的。
             if (result.Contains("Error: Response status code does not indicate success: 400 (Bad Request).") || result.Contains("400 Bad Request"))
             {
                 _logger.Error($"❌ [submitOrder] 400 Bad Request 错误，账户 [{account.UserCode}] 提交交易失败。服务器返回原始内容: {result}");
@@ -829,12 +831,22 @@ namespace AutoHorseRace.Utils
                 {
                     string errorMsg = resultJObject["message"]?.ToString() ?? resultJObject["detail"]?.ToString() ?? "未知错误";
                     _logger.Error($"submitOrder failed: {errorMsg}");
+                    // 🔧 关键修复：服务器已经给出了完整、明确的拒绝响应（HTTP 请求成功完成，
+                    // 只是业务上判定失败），必须把这个 resultJObject 原样返回，而不是吞成 null。
+                    // 上层 ExecuteTrade/AutoBetProcess/AutoEatProcess/ClosePositionByDeadline
+                    // 需要靠"result != null 但 success=false"这个区别，
+                    // 来判断到底是"服务器明确拒绝"（应立即释放预占）还是"请求异常/网络超时"
+                    // （才应该保留预占、等下一轮快照核实）。之前这里没有 return，
+                    // 会导致两种完全不同的情况在上层被误判成同一种"null（可能是网络问题）"，
+                    // 掩盖了服务器真实的拒绝原因，也让本该释放的预占被错误地保留了 60 秒。
+                    return resultJObject;
                 }
             }
             catch (Exception ex)
             {
                 _logger.Error($"❌ [submitOrder] 解析响应 JSON 失败: {ex.Message}, 原始内容: {result}");
             }
+            // 只有 HTTP 请求异常、或响应体根本不是合法 JSON（真正的传输/解析层面问题）才会走到这里，返回 null。
             return null;
         }
 
@@ -876,6 +888,7 @@ namespace AutoHorseRace.Utils
                 serverProcessTime = "local_file";
             }
 
+            // 🔧 同样，只有 HTTP 请求本身没有正确完成才属于真正的传输层异常，应返回 null。
             if (result.Contains("Error: Response status code does not indicate success: 400 (Bad Request).") || result.Contains("400 Bad Request"))
             {
                 _logger.Error($"❌ [singleAutoTrade] 400 Bad Request 错误，账户 [{account.UserCode}] 提交交易失败。");
@@ -898,12 +911,23 @@ namespace AutoHorseRace.Utils
                 {
                     string errorMsg = resultJObject["message"]?.ToString() ?? resultJObject["detail"]?.ToString() ?? "未知错误";
                     _logger.Error($"singleAutoTrade failed: {errorMsg}");
+                    // 🔧 关键修复：与 submitOrder 同理。这类响应（如 {"code":400,"message":"单笔交易未确认: 
+                    // 对不起！ 你的交易不成功。","success":false}）是服务器正常处理完成后给出的明确业务拒绝，
+                    // HTTP 请求本身没有任何异常（能被成功 JObject.Parse 就说明是合法完整的响应），
+                    // 必须原样返回，让上层能区分"明确拒绝"和"网络异常"这两种完全不同的情况：
+                    // 前者应立即释放预占、允许下一轮强平重新判断该 combo；
+                    // 后者才应该保留预占、等待服务器快照核实，避免误判后重复下单。
+                    // 之前这里没有 return，导致这两种情况在上层被统一误判成
+                    // "原始响应: null(请求异常)"，是造成强平重复吃注的直接根因之一。
+                    return resultJObject;
                 }
             }
             catch (Exception ex)
             {
                 _logger.Error($"❌ [singleAutoTrade] 解析响应 JSON 失败: {ex.Message}");
             }
+            // 只有 HTTP 请求异常、或响应体根本不是合法 JSON 才会走到这里，返回 null，
+            // 代表"结果未知"，上层应保留预占、等待服务器快照核实。
             return null;
         }
 

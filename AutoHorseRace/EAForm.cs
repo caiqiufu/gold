@@ -55,14 +55,14 @@ namespace AutoHorseRace
             );
             // 🔧 强平轮询：不在方法内部写循环等待成交，而是靠这个定时器每隔约 5 秒（固定 5 秒 + 0~2 秒随机抖动，
             // 避免多个客户端固定 5 秒整数倍撞车）重新调用一次 QueryEATBETInfoDataForClosePositionAsync，
-            // 每次调用都完整执行一轮"删挂单 → 重新同步仓位快照 → 按最新数据重新挂吃注单"，
-            // 直到强平窗口结束（开赛时刻）或该组合的 pending 归零（ClosePositionByDeadline 内部会自动跳过已无 pending 的组合）。
+            // 每次调用都完整执行一轮"删挂单 → 等待服务器数据落地 → 重新同步仓位快照 → 按需重新挂吃注单"，
+            // 直到强平窗口结束（开赛时刻）或该组合被 TradeDecisionEngine 判定为不再需要处理为止。
             _timerRefreshBetInfoForClosePosition = new RandomTaskTimer(
                 "业务C_强平下注",
                 async () => await QueryEATBETInfoDataForClosePositionAsync(),
-                baseDelaySeconds: 5,
-                randomMinSeconds: 0,
-                randomMaxSeconds: 2
+                baseDelaySeconds: 15,
+                randomMinSeconds: 1,
+                randomMaxSeconds: 6
             );
         }
         private float _ProcessingAngle = 0; // 旋转角度
@@ -123,6 +123,14 @@ namespace AutoHorseRace
         private readonly object _lockObj = new object();
         private bool _isRefreshing = false;
         private readonly TradeDecisionEngine _decisionEngine = new TradeDecisionEngine();
+
+        /// <summary>
+        /// 统一的交易结果/日志落库服务：ExecuteTrade 的实时提交结果、RefreshTradeListToDB 的周期性
+        /// 补写，全部经这里 Enqueue 入队，由固定数量的 worker 按 dictKey（raceNo_type_combo）分片、
+        /// 严格按提交顺序串行落库，避免多个写入源互相竞态。详见 TradeRecordWriter.cs。
+        /// </summary>
+        private TradeRecordWriter _tradeRecordWriter;
+
         /// <summary>
         /// 定时查询并刷新盘口/投注信息的异步方法（已加入防重入与并发安全保护）
         /// </summary>
@@ -282,60 +290,231 @@ namespace AutoHorseRace
         /// <summary>
         /// 浮点误差容忍度，用于金额/挂单是否为零的判断
         /// </summary>
+        // V20260912_CLOSE_WINDOW_AUDIT:
+        // 正常下注截止 = Race - _Config.AutoTradeEndTimeDuration
+        // 强平启动 = 正常下注截止 + 10 秒
+        // 强平窗口 = [强平启动, Race)
+        // 正常/强平 EAT 均通过 TryReserveEatIntent + HardRemaining 原子限额。
         private const double AmountEpsilon = 0.001;
 
         /// <summary>
         /// 强平轮询入口：由 _timerRefreshBetInfoForClosePosition 每隔约 5 秒调用一次，
         /// 不在方法内部循环等待成交，而是依赖定时器的下一次触发形成"轮询"效果。
-        /// 每次调用都完整执行一轮：删除现有挂单 → 重新同步仓位快照 → 基于最新数据重新挂吃注单。
+        /// 每次调用都完整执行一轮：删除现有挂单 → 等待服务器数据落地 → 重新同步仓位快照 →
+        /// 按 TradeDecisionEngine 的判断结果重新挂吃注单。
         /// </summary>
         private async Task QueryEATBETInfoDataForClosePositionAsync()
         {
-            // 1. 解析当前比赛时间字符串，失败直接退出并记录日志
-            if (!TimeSpan.TryParse(_Config.CurrentRaceTime, out TimeSpan raceTime))
+            // =========================================================================
+            // 强制平仓时间窗口检查
+            //
+            // 重要：
+            // 这里不能使用 TimeSpan 做比较，因为比赛时间可能是 00:00:00 ~ 05:59:59，
+            // 当当前时间处于前一天晚上时，会发生跨天判断错误。
+            //
+            // 例如：
+            // 当前时间       = 2026-09-12 23:58:09
+            // 比赛时间       = 00:00:00
+            // 实际比赛时间   = 2026-09-13 00:00:00
+            //
+            // 如果 AutoTradeEndTimeDuration = 120 秒：
+            // 强平开始时间   = 2026-09-12 23:58:00
+            // 强平结束时间   = 2026-09-13 00:00:00
+            //
+            // 因此当前时间 23:58:09 应当正确判定为：
+            // [强平窗口内]
+            // =========================================================================
+
+            DateTime now = DateTime.Now;
+
+            // -------------------------------------------------------------------------
+            // 1. 解析当前比赛时间
+            // -------------------------------------------------------------------------
+            if (!TimeSpan.TryParse(
+                    _Config.CurrentRaceTime,
+                    out TimeSpan raceTime))
             {
-                _logger.Error($"[强制平仓] 解析当前比赛时间失败，CurrentRaceTime 格式无效: '{_Config.CurrentRaceTime}'");
+                _logger.Error(
+                    $"[强制平仓] 解析当前比赛时间失败，" +
+                    $"CurrentRaceTime 格式无效: '{_Config.CurrentRaceTime}'");
+
                 return;
             }
 
-            // 2. 计算强平窗口：开赛前 X 秒开始，开赛时刻（raceTime）即结束，不再延续到赛后
-            // 🔧 注意：raceTime 越接近 00:00，deadlineTime 可能为负，在跨天边界上会有偏差，
-            // 如果开赛时间有可能落在凌晨附近，需要改用完整 DateTime 做窗口比较，而不是纯 TimeSpan。
-            TimeSpan forceCloseOffset = TimeSpan.FromSeconds(_Config.AutoTradeEndTimeDuration);
-            TimeSpan deadlineTime = raceTime.Subtract(forceCloseOffset);       // 强平窗口开启时间（开赛前 X 秒）
-            TimeSpan endTime = raceTime;                                       // 强平窗口结束时间（开赛时刻）
-            TimeSpan currentTime = DateTime.Now.TimeOfDay;
+            // -------------------------------------------------------------------------
+            // 2. 构造完整的比赛 DateTime
+            // -------------------------------------------------------------------------
+            string todayStr = now.ToString("yyyy-MM-dd");
 
-            // 3. 判断当前时间：必须 [>= 强平起始时间] 并且 [< 开赛时刻]，不在窗口内直接返回，
-            //    等待定时器下一次触发时再判断（这就是"轮询"，而不是方法内部 while 循环）
-            if (currentTime < deadlineTime || currentTime >= endTime)
+            string fullRaceTimeStr =
+                $"{todayStr} {_Config.CurrentRaceTime}:00";
+
+            if (!DateTime.TryParseExact(
+                    fullRaceTimeStr,
+                    "yyyy-MM-dd HH:mm:ss",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out DateTime raceDateTime))
             {
+                _logger.Error(
+                    $"[强制平仓] 构造比赛完整时间失败，" +
+                    $"FullRaceTime='{fullRaceTimeStr}', " +
+                    $"CurrentRaceTime='{_Config.CurrentRaceTime}'");
+
                 return;
             }
 
-            // 开启高精度计时器监控本轮强平耗时
-            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            // -------------------------------------------------------------------------
+            // 3. 跨天处理
+            //
+            // 如果当前已经是晚上 20:00 以后，而比赛时间是凌晨
+            // 00:00 ~ 05:59，则比赛属于“下一天”。
+            //
+            // 例如：
+            // Now       = 2026-09-12 23:58:09
+            // RaceTime  = 00:00:00
+            //
+            // 初始解析：
+            // 2026-09-12 00:00:00
+            //
+            // 修正后：
+            // 2026-09-13 00:00:00
+            // -------------------------------------------------------------------------
+            if (now.Hour >= 20 && raceDateTime.Hour < 6)
+            {
+                raceDateTime = raceDateTime.AddDays(1);
+            }
+
+            // -------------------------------------------------------------------------
+            // 4. 计算正常下注截止时间与强平启动/结束时间
+            // 正常下注截止 = 开赛前 AutoTradeEndTimeDuration 秒
+            // 强平启动 = 正常下注截止后 10 秒
+            // 强平窗口 = [closeStartTime, closeEndTime)，closeEndTime = 开赛后 30 秒
+            // V20260913_CLOSE_WINDOW_EXTEND：强平窗口原本在开赛时刻（raceDateTime）就截止，
+            // 现在按需求延长到开赛后 30 秒，给强平多留一轮轮询的时间窗口。
+            // -------------------------------------------------------------------------
+            DateTime normalBetEndTime = raceDateTime.AddSeconds(-_Config.AutoTradeEndTimeDuration);
+            DateTime closeStartTime = normalBetEndTime.AddSeconds(10);
+            DateTime closeEndTime = raceDateTime.AddSeconds(30);
+
+            // -------------------------------------------------------------------------
+            // 5. 输出时间诊断日志
+            //
+            // 这个日志非常重要。
+            // 如果以后再次出现“强平没有执行”的问题，可以直接从日志判断
+            // 当前时间、比赛时间以及强平窗口是否正确。
+            // -------------------------------------------------------------------------
+            _Log.LogInfo(
+                $"[强平时间检查] " +
+                $"Now=[{now:yyyy-MM-dd HH:mm:ss}] | " +
+                $"NormalBetEnd=[{normalBetEndTime:yyyy-MM-dd HH:mm:ss}] | " +
+                $"CloseStart=[{closeStartTime:yyyy-MM-dd HH:mm:ss}] | " +
+                $"CloseEnd=[{closeEndTime:yyyy-MM-dd HH:mm:ss}] | " +
+                $"Race=[{raceDateTime:yyyy-MM-dd HH:mm:ss}] | " +
+                $"AutoDeletePendingOrder=[{_Config.AutoDeletePendingOrder}] | " +
+                $"AutoClosePosition=[{_Config.AutoClosePosition}]");
+
+            // -------------------------------------------------------------------------
+            // 6. 判断是否处于强平窗口
+            // 强平窗口严格为 [closeStartTime, closeEndTime)，即正常下注截止后 10 秒启动，开赛后 30 秒结束。
+            // -------------------------------------------------------------------------
+            if (now < closeStartTime || now >= closeEndTime)
+            {
+                _Log.LogInfo(
+                    $"[强平时间检查] 当前不在强平窗口，跳过本轮。" +
+                    $" Now=[{now:yyyy-MM-dd HH:mm:ss}], " +
+                    $"Window=[{closeStartTime:yyyy-MM-dd HH:mm:ss} ~ " +
+                    $"{closeEndTime:yyyy-MM-dd HH:mm:ss})");
+
+                return;
+            }
+
+            // -------------------------------------------------------------------------
+            // 7. 当前正式进入强平窗口
+            // -------------------------------------------------------------------------
+            var stopwatch =
+                System.Diagnostics.Stopwatch.StartNew();
+
             try
             {
-                // 计算当前距离开赛还有多少秒（取整），此处必然 currentTime < raceTime
-                int remainingSeconds = (int)(raceTime - currentTime).TotalSeconds;
-                _Log.LogInfo($"距离开赛还有 [{remainingSeconds}] 秒，开始本轮强平轮询");
+                // ---------------------------------------------------------------------
+                // 计算距离开赛还有多少秒
+                // ---------------------------------------------------------------------
+                int remainingSeconds =
+                    Math.Max(
+                        0,
+                        (int)(raceDateTime - now).TotalSeconds);
 
+                _Log.LogInfo(
+                    $"距离开赛还有 [{remainingSeconds}] 秒，" +
+                    $"开始本轮强平轮询");
+
+                // ---------------------------------------------------------------------
+                // 8. 删除挂单
+                //
+                // AutoDeletePendingOrder 与 AutoClosePosition 是两个独立功能。
+                // 删除挂单只由 AutoDeletePendingOrder 控制。
+                // ---------------------------------------------------------------------
                 if (_Config.AutoDeletePendingOrder)
                 {
+                    _Log.LogInfo(
+                        "[强平] AutoDeletePendingOrder=TRUE，" +
+                        "开始执行删除挂单");
+
                     await DeletePendingOrdersAndCleanLocalStateAsync();
+                    if (DateTime.Now >= closeEndTime)
+                    {
+                        _Log.LogInfo($"[强平] 删除挂单完成后已超过强平窗口结束时间[{closeEndTime:yyyy-MM-dd HH:mm:ss}]，停止本轮强平。");
+                        return;
+                    }
+                }
+                else
+                {
+                    _Log.LogInfo(
+                        "[强平] AutoDeletePendingOrder=FALSE，" +
+                        "跳过删除挂单");
                 }
 
-                // 强平持仓不依赖"是否开启自动删除挂单"，二者是独立功能
-                if (_Config.AutoDeletePendingOrder && _Config.AutoClosePosition)
+                // ---------------------------------------------------------------------
+                // 9. 强平持仓
+                //
+                // 注意：
+                // 强平持仓不能依赖 AutoDeletePendingOrder。
+                // 两个功能完全独立。
+                // ---------------------------------------------------------------------
+                if (_Config.AutoClosePosition)
                 {
+                    _Log.LogInfo(
+                        "[强平] AutoClosePosition=TRUE，" +
+                        "开始执行持仓强平");
+                    if (DateTime.Now >= closeEndTime)
+                    {
+                        _Log.LogInfo($"[强平] 当前已超过强平窗口结束时间[{closeEndTime:yyyy-MM-dd HH:mm:ss}]，不再发送强平订单。");
+                        return;
+                    }
                     await ClosePositionsByDeadlineAsync();
                 }
+                else
+                {
+                    _Log.LogInfo(
+                        "[强平] AutoClosePosition=FALSE，" +
+                        "跳过持仓强平");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(
+                    ex,
+                    "[强制平仓] 本轮强平执行异常");
             }
             finally
             {
                 stopwatch.Stop();
-                _Log.LogInfo($"[性能监控] 本轮强平轮询执行耗时: {stopwatch.ElapsedMilliseconds} ms（下一轮由定时器约 5 秒后自动触发）");
+
+                _Log.LogInfo(
+                    $"[性能监控] 本轮强平轮询执行耗时: " +
+                    $"{stopwatch.ElapsedMilliseconds} ms" +
+                    $"（下一轮由定时器约 5 秒后自动触发）");
             }
         }
 
@@ -346,7 +525,6 @@ namespace AutoHorseRace
         private async Task DeletePendingOrdersAndCleanLocalStateAsync()
         {
             _Log.LogInfo($"删除挂单");
-
             // 1. 强平前先删除所有挂单
             JObject deleteAll = HTTPHelper.deleteAll(_Config.EAServerAddress, _EAAccount.UserCode, _Config.CurrentRaceDate, _Config.CurrentRaceType, _Config.CurrentRaceNo, out string serverProcessTime);
             _Log.LogInfo($"[性能监控][QueryEATBETInfoDataForClosePositionAsync][deleteAll] 耗时: {serverProcessTime}");
@@ -370,6 +548,31 @@ namespace AutoHorseRace
                 {
                     s.ResetTradeRecordId();
                 }
+
+                // 🔥 BUG 修复（强平"没有相关日志"的根因）：ComboTradeState 内部的
+                // _betCommittedHighWatermark / _eatCommittedHighWatermark 是"已执行+挂单中"金额的历史
+                // 最大值，只会 Math.Max 往上顶、永远不会自动回落。deleteAll 在这里已经把本场次所有
+                // 挂单（包括尚未成交的试探性吃票/下注挂单）真正删除了，这些挂单对应的历史峰值却依然
+                // 永久卡在水位线里，导致 EffectiveEatCommitted/EffectiveBetCommitted 被虚高的历史挂单
+                // 峰值撑住，TradeDecisionEngine.GetRemainingEatAmount 从此永远算出 0——即使 BetExecuted
+                // 和 EatExecuted 之间明明还有真实缺口，该组合也再不会被 ClosePositionsByDeadlineAsync 的
+                // 外层 allStates 过滤判定为"需要强平"，且因为在最外层就被滤掉，后面完全不会留下任何日志。
+                // deleteAll 成功返回，就是"挂单已被服务器真正删除"这个明确时间点，此时把水位线显式下调回
+                // 当前真正已执行（Executed）的金额是绝对安全的——Executed 本身另有单调不减保护，不会被
+                // 这个操作误吞任何已成交金额，只会清除掉"已被取消、从未成交"的那部分虚高历史水位。
+                foreach (var s in _Config.TradeStateStore.GetAll()
+                    .Where(s => string.Equals(s.RaceNo, _Config.CurrentRaceNo)))
+                {
+                    s.ResetCommittedHighWatermarkAfterCancel();
+                }
+
+                // 🔧 删除挂单是一次网络请求，服务器端从"接收删除指令"到"数据真正落库、
+                // 后续 queryMyTrade 能查到最新状态"之间存在处理延迟。如果删除后立即查询，
+                // 很可能拿到的还是删除前的旧快照（挂单看起来还在），导致误判还有 pending 而跳过强平。
+                // 这里随机等待 1~3 秒，给服务器留出数据落地的时间，再进行后续查询。
+                int delayMs = new Random().Next(3000, 5001);
+                _Log.LogInfo($"删除挂单已提交，等待 {delayMs} ms 让服务器数据落地后再查询最新仓位");
+                await Task.Delay(delayMs);
             }
             else
             {
@@ -379,36 +582,92 @@ namespace AutoHorseRace
 
         /// <summary>
         /// 强平核心逻辑（单轮，不循环）：
-        /// 1. 重新从服务器同步一次仓位快照（删除挂单后旧快照已失效）；
-        /// 2. 找出当前仍有 pending（EffectiveBetPending/EffectiveEatPending > 0）的组合，
-        ///    这些就是"删单后尚未成交、需要重新挂吃注单"的 bet；
+        /// 1. 重新从服务器同步一次仓位快照（删除挂单 + 等待落地后，旧快照已失效）；
+        /// 2. 找出满足强平下单原则的组合——赌注已确认（无赌注挂单）、吃注当前没有挂单，
+        ///    且 TradeDecisionEngine.GetRemainingEatAmount 判定确实还有缺口需要补吃；
         /// 3. 按 Q / QP 两种类型分别构建强平请求并提交。
         /// 本轮只挂一次单，若仍未成交，等待定时器下一次触发时会自然再走一遍同样的流程。
         /// </summary>
         private async Task ClosePositionsByDeadlineAsync()
         {
             string serverProcessTime = "0ms";
+            if (!TryGetTradeTimeContextForClose(DateTime.Now, out DateTime raceDateTime, out DateTime normalBetEndTime, out DateTime closeStartTime, out DateTime closeEndTime) ||
+                DateTime.Now < closeStartTime || DateTime.Now >= closeEndTime)
+            {
+                _Log.LogInfo($"[强平] 当前不在强平窗口，停止发送强平订单。Window=[{closeStartTime:yyyy-MM-dd HH:mm:ss} ~ {closeEndTime:yyyy-MM-dd HH:mm:ss})");
+                return;
+            }
 
-            // 删除挂单后必须重新从服务器同步一次仓位快照：
+            // 重新从服务器同步一次仓位快照：
             // deleteAll/deleteOpenBetRecord 只删除了服务端/本地数据库记录，
-            // TradeStateStore 里缓存的 EffectiveBetPending/EffectiveEatPending 仍是删除前的旧值，
-            // 若不重新拉取，下面基于 allStates 判断"哪些 bet 还需要重新挂吃注单"就会用到过期数据。
+            // TradeStateStore 里缓存的 BetExecuted/EffectiveEatCommitted 仍是删除前的旧值，
+            // 若不重新拉取，下面基于 allStates 判断"哪些组合需要重新挂吃注单"就会用到过期数据。
             await QueryAndApplyMyTradeSnapshotAsync();
+            if (DateTime.Now >= closeEndTime)
+            {
+                _Log.LogInfo($"[强平] 仓位快照刷新完成后已超过强平窗口结束时间[{closeEndTime:yyyy-MM-dd HH:mm:ss}]，停止本轮强平。");
+                return;
+            }
 
-            // 🔥 "哪些 bet 需要重新挂吃注单"的判断依据：
-            // 本场次下，仍存在 EffectiveBetPending 或 EffectiveEatPending 大于 0 的组合，
-            // 说明这笔单子在服务器上尚未完全成交，需要继续挂吃注单去追。
-            // 已经成交完毕（两者都为 0）的组合不会出现在这个列表里，自然就不会被重复挂单。
-            var allStates = _Config.TradeStateStore.GetAll()
-                .Where(s => string.Equals(s.RaceNo, _Config.CurrentRaceNo) && (s.EffectiveBetPending > 0 || s.EffectiveEatPending > 0))
+            // 🔥 强平下单原则（粗筛）：赌注已确认（BetExecuted > 0 且赌注无挂单）、
+            // 吃注当前没有挂单（EffectiveEatPending == 0），
+            // 且直接复用 TradeDecisionEngine.GetRemainingEatAmount 判断是否确实还有缺口需要补吃。
+            // 🔧 之前的版本自己手写了 "EatExecuted < BetExecuted" 这类判断，没有把"已预占但服务器
+            // 尚未确认"的部分算进去，和 AutoEatProcess 用的判断口径不一致，存在并发窗口期超发的风险。
+            // 现在统一改成调用同一个引擎方法，确保正常吃注和强平吃注的判断标准完全一致。
+            //
+            // 🔧 诊断增强：原来这里是一整条 LINQ .Where(...)，任何组合被过滤掉都不会留下任何日志，
+            // 出现"某个组合应该强平却完全找不到相关日志"时完全没法定位是卡在哪一个子条件上。
+            // 现在展开成显式循环，对当前场次下的每一个组合，把四个子条件的实际数值和判断结果
+            // 都打一行 Debug 日志，即使最终被过滤掉也能看到具体原因。
+            var candidateStatesForClose = _Config.TradeStateStore.GetAll()
+                .Where(s => string.Equals(s.RaceNo, _Config.CurrentRaceNo))
                 .ToList();
+            _Log.LogInfo($"[强平诊断] 当前场次[{_Config.CurrentRaceNo}]TradeStateStore中共有[{candidateStatesForClose.Count}]个组合，开始逐一评估强平入选条件。");
+            var allStates = new List<ComboTradeState>();
+            foreach (var s in candidateStatesForClose)
+            {
+                bool condBetExecuted = s.BetExecuted > AmountEpsilon;
+                bool condBetPending = s.EffectiveBetPending <= AmountEpsilon;
+                bool condEatPending = s.EffectiveEatPending <= AmountEpsilon;
+                double remainingEatAmountForDiag = 0;
+                bool condRemaining = false;
+                try
+                {
+                    remainingEatAmountForDiag = _decisionEngine.GetRemainingEatAmount(s);
+                    condRemaining = remainingEatAmountForDiag > AmountEpsilon;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"[强平诊断][{s.DictKey}] GetRemainingEatAmount 计算异常: {ex.Message}", ex);
+                }
+                bool passedCloseFilter = condBetExecuted && condBetPending && condEatPending && condRemaining;
+                // 🔧 诊断增强：GetRemainingEatAmount 内部用的是 state.EffectiveEatCommitted（可能叠加了
+                // 尚未被服务器确认/尚未释放的预占金额），不是这里能直接看到的服务器确认口径 EatExecuted。
+                // 把两者都打出来，一旦出现 EffectiveEatCommitted 明显高于 EatExecuted 且长期不回落，
+                // 就是"预占卡死导致 remaining 永远算成 0"的直接证据。
+                _logger.Debug(
+                    $"[强平诊断][{s.DictKey}] " +
+                    $"BetExecuted={s.BetExecuted:F3}(>{AmountEpsilon}⇒{condBetExecuted}) | " +
+                    $"EffectiveBetPending={s.EffectiveBetPending:F3}(<={AmountEpsilon}⇒{condBetPending}) | " +
+                    $"EffectiveEatPending={s.EffectiveEatPending:F3}(<={AmountEpsilon}⇒{condEatPending}) | " +
+                    $"EatExecuted={s.EatExecuted:F3}(服务器确认口径) | " +
+                    $"EffectiveEatCommitted={s.EffectiveEatCommitted:F3}(引擎实际用于计算缺口的口径) | " +
+                    $"RemainingEatAmount={remainingEatAmountForDiag:F3}(>{AmountEpsilon}⇒{condRemaining}) " +
+                    $"=> {(passedCloseFilter ? "【入选强平候选】" : "【被过滤，不进入强平】")}");
+                if (passedCloseFilter)
+                {
+                    allStates.Add(s);
+                }
+            }
+            _Log.LogInfo($"[强平诊断] 共[{allStates.Count}]/[{candidateStatesForClose.Count}]个组合通过强平入选条件（Q+QP合计）。");
 
             var Q_BettingInfoDict = BuildBettingInfoDict(allStates, "Q");
             var QP_BettingInfoDict = BuildBettingInfoDict(allStates, "QP");
 
             if (Q_BettingInfoDict.Count == 0 && QP_BettingInfoDict.Count == 0)
             {
-                _Log.LogInfo("当前无待成交仓位，本轮强平无需挂单");
+                _Log.LogInfo("当前无需要重新挂吃注单的组合，本轮强平无需下单");
                 return;
             }
 
@@ -421,19 +680,31 @@ namespace AutoHorseRace
                 _Log.LogInfo($"无下注数据,不能处理强平赌注");
                 return;
             }
+            if (DateTime.Now >= closeEndTime)
+            {
+                _Log.LogInfo($"[强平] queryMarket 完成后已超过强平窗口结束时间[{closeEndTime:yyyy-MM-dd HH:mm:ss}]，停止本轮强平。");
+                return;
+            }
 
+            // 🔧 V20260913_CLOSE_MATCH_SIDE_FIX：强平要挂的是"吃"单，吃单必须匹配市场上别人挂出来的
+            // "赌"(BET)单才能成交——ClosePositionByDeadline 内部会把这里传入列表里、对应 combo 的那笔
+            // 记录的 odds/limit 当成"对手盘报价"来定价、下单。之前这里传的是 Q_EATBetInfos/QP_EATBetInfos
+            // （market 上别人挂的"吃"单），那是跟我方同边、根本不是可撮合的对手盘，绝大多数组合天然就
+            // 匹配不到（诊断日志里反复出现的"在本轮 EATBetInfos[N个不同combo]中找不到精确匹配"根因即在此），
+            // 而不是 combo 本身没有报价。现改为传入 Q_BETBetInfos/QP_BETBetInfos（market 上别人挂的"赌"单），
+            // 这才是我方"吃"单真正需要撮合的对手盘。
             if (Q_BettingInfoDict.Count > 0)
             {
                 _Log.LogInfo($"[Q]强制平赌注");
-                List<BetInfo> Q_EATBetInfos = BetBatInfos.ContainsKey("Q_EATBetInfos") ? BetBatInfos["Q_EATBetInfos"] : new List<BetInfo>();
-                ClosePositionByDeadline(Q_BettingInfoDict, Q_EATBetInfos, "Q");
+                List<BetInfo> Q_BETBetInfos = BetBatInfos.ContainsKey("Q_BETBetInfos") ? BetBatInfos["Q_BETBetInfos"] : new List<BetInfo>();
+                ClosePositionByDeadline(Q_BettingInfoDict, Q_BETBetInfos, "Q");
             }
 
             if (QP_BettingInfoDict.Count > 0)
             {
                 _Log.LogInfo($"[QP]强制平赌注");
-                List<BetInfo> QP_EATBetInfos = BetBatInfos.ContainsKey("QP_EATBetInfos") ? BetBatInfos["QP_EATBetInfos"] : new List<BetInfo>();
-                ClosePositionByDeadline(QP_BettingInfoDict, QP_EATBetInfos, "QP");
+                List<BetInfo> QP_BETBetInfos = BetBatInfos.ContainsKey("QP_BETBetInfos") ? BetBatInfos["QP_BETBetInfos"] : new List<BetInfo>();
+                ClosePositionByDeadline(QP_BettingInfoDict, QP_BETBetInfos, "QP");
             }
         }
 
@@ -442,15 +713,38 @@ namespace AutoHorseRace
         /// </summary>
         private Dictionary<string, IDictionary<string, string>> BuildBettingInfoDict(List<ComboTradeState> allStates, string type)
         {
-            return allStates
-                .Where(s => string.Equals(s.Type, type))
-                .ToDictionary(s => s.Combo, s => (IDictionary<string, string>)new Dictionary<string, string>
+            var typedStates = allStates.Where(s => string.Equals(s.Type, type)).ToList();
+
+            // 🔧 诊断+防御：原来直接 .ToDictionary(s => s.Combo, ...)，如果同一 type 下出现两条
+            // Combo 字符串完全相同的 ComboTradeState（理论上不该发生，但一旦发生 ToDictionary 会
+            // 直接抛 ArgumentException），异常发生在 Q_BettingInfoDict/QP_BettingInfoDict 构建阶段，
+            // 会导致本轮强平在外层 try/catch 只留下一行"[强制平仓] 本轮强平执行异常"、看不出是哪个
+            // combo 重复，且 Q 和 QP 两种类型的强平会被这一个异常一起拖累、全部静默失败。
+            // 这里先显式检测重复项并单独报错，再用 GroupBy+First 兜底去重，避免整轮崩溃。
+            var dupGroups = typedStates.GroupBy(s => s.Combo).Where(g => g.Count() > 1).ToList();
+            foreach (var g in dupGroups)
+            {
+                _logger.Error(
+                    $"[强平诊断][{type}] 发现重复 Combo='{g.Key}'，共[{g.Count()}]条 ComboTradeState " +
+                    $"(DictKey: {string.Join(", ", g.Select(s => s.DictKey))})，" +
+                    $"原逻辑 ToDictionary 会因此抛异常导致本轮[{type}]强平整体静默失败，已自动去重（保留第一条）。");
+            }
+
+            var result = typedStates
+                .GroupBy(s => s.Combo)
+                .ToDictionary(g => g.Key, g => (IDictionary<string, string>)new Dictionary<string, string>
                 {
-                    { "combo", s.Combo }, { "type", s.Type },
-                    { "bet_odds", s.BetOdds.ToString() },
-                    { "bet_pending_amount", s.EffectiveBetPending.ToString() },
-                    { "eat_pending_amount", s.EffectiveEatPending.ToString() }
+                    { "combo", g.First().Combo }, { "type", g.First().Type },
+                    { "bet_odds", g.First().BetOdds.ToString() },
+                    { "bet_pending_amount", g.First().EffectiveBetPending.ToString() },
+                    { "eat_pending_amount", g.First().EffectiveEatPending.ToString() }
                 });
+
+            // 🔧 诊断：明确打印本轮到底哪些 combo 进了 Q/QP 的强平候选字典——这样即使后面
+            // ClosePositionByDeadline 内部因为并发/截断等原因看不全，也能从这一行确认某个
+            // 组合（例如 1-7）究竟有没有进入候选集合。
+            _Log.LogInfo($"[强平诊断][{type}] 本轮入选强平候选组合[{result.Count}]个: [{string.Join(", ", result.Keys)}]");
+            return result;
         }
 
         /// <summary>
@@ -464,6 +758,9 @@ namespace AutoHorseRace
             _timerRefreshBetInfoForClosePosition.Stop();
             timerRefreshAutoBettingInfo.Stop();
             _Config.TradeStateStore?.Stop();
+            // 🔧 停止接收新的落库 job，并给已入队但还没写完的 job 最多 5 秒排干时间，
+            // 尽量避免进程退出时丢失最后几笔还没来得及落库的交易结果。
+            _tradeRecordWriter?.Stop(TimeSpan.FromSeconds(5));
             if (string.Equals(buttonAccountLogin.Text, "已登陆"))
             {
                 HTTPHelper.logout(_Config.EAServerAddress, _EAAccount.UserCode);
@@ -672,6 +969,27 @@ namespace AutoHorseRace
                 labelDSCredit = labelDSCredit
             };
             InitializeTimers();
+
+            // 🔧 统一交易落库服务：ExecuteTrade 的实时提交结果、RefreshTradeListToDB 的周期性补写，
+            // 全部改为经这里的 Enqueue 入队，由固定数量的 worker 按 dictKey（raceNo_type_combo）
+            // 哈希分片、单线程严格按入队顺序（FIFO）串行处理，不同 combo 之间在不同 worker 上并行。
+            // 这样彻底合并了原来两条互不知情、可能互相竞态的写入通道（详见 TradeRecordWriter.cs 顶部注释）。
+            //
+            // 注意：这里用到的 _Config/_EAAccount 此时还没有被 LoadConfigFile()/EAForm_Load 赋值，
+            // 但 eaAccountProvider/resolveState 全部是 lambda，只有真正处理 job 时才会读取，
+            // 构造阶段（这里）不会触碰这两个字段，所以在 LoadConfigFile 之前构造是安全的。
+            _tradeRecordWriter = new TradeRecordWriter(
+                workerCount: 4,
+                bizLog: _Log,
+                eaAccountProvider: () => _EAAccount,
+                resolveState: dictKey =>
+                {
+                    if (_Config?.TradeStateStore == null) return null;
+                    var parts = dictKey.Split(new[] { '_' }, 3);
+                    return parts.Length == 3 ? _Config.TradeStateStore.GetOrCreate(parts[0], parts[1], parts[2]) : null;
+                },
+                logInfo: msg => _Log?.LogInfo(msg),
+                logError: msg => _logger.Error(msg));
         }
         /// <summary>
         /// 初始化UI参数
@@ -1236,6 +1554,11 @@ namespace AutoHorseRace
         public void AutoBetProcess(List<BetInfo> EATBetInfos, string type, string targetCombo = null)
         {
             if (EATBetInfos == null || EATBetInfos.Count == 0 || string.IsNullOrEmpty(targetCombo)) return;
+            if (!TryGetTradeTimeContext(out _, out _, out DateTime triggerEndTime) || DateTime.Now >= triggerEndTime)
+            {
+                _logger.Debug($"[{type}][{targetCombo}] 已达到正常下注截止时间，跳过 BET。");
+                return;
+            }
             string dictKey = ComboTradeState.BuildDictKey(_Config.CurrentRaceNo, type, targetCombo);
             object betLock = _betLocks.GetOrAdd(dictKey, _ => new object());
             lock (betLock)
@@ -1309,10 +1632,31 @@ namespace AutoHorseRace
                                     betOdds = betInfoItem.odds
                                 };
                                 JObject result = ExecuteTrade(pendingInfo, betInfoItem, "P", "Y");
+
+                                // 🔧 关键修复：与强平通道（ClosePositionByDeadline）保持完全一致的口径，
+                                // 区分"服务器明确拒绝"（result != null 但 success=false）和
+                                // "请求本身异常/网络超时/JSON解析失败"（result == null）两种情况：
+                                //   - result == null → 这笔单子最终是否成交是未知的，若立即释放预占，
+                                //                       一旦实际上已成交，下一轮扫描会因"没有 pending"
+                                //                       而重复提交，造成重复下注/超发。必须保留预占，
+                                //                       等待下一轮 RefreshMyTradeSnapshot/ApplyServerSnapshot
+                                //                       用服务器权威数据核实。
+                                //   - result != null 且未接受 → 服务器已经正常处理完请求并给出明确拒绝，
+                                //                       这笔单子确定没有成交，应立即释放预占，
+                                //                       允许该 combo 在下一轮被重新判断和提交。
                                 if (!IsOrderAccepted(result))
                                 {
-                                    comboState.ReleaseBetIntent(intentId);
-                                    _logger.Warn($"[{targetCombo}] 下注未被接受，释放预占");
+                                    if (result == null)
+                                    {
+                                        _logger.Warn($"[{targetCombo}] 下注请求异常（网络超时/连接失败/响应解析失败），" +
+                                                     $"保留预占等待服务器快照核实，避免误判后重复下单。");
+                                    }
+                                    else
+                                    {
+                                        string rejectMsg = result["message"]?.ToString() ?? "未知拒绝原因";
+                                        comboState.ReleaseBetIntent(intentId);
+                                        _logger.Warn($"[{targetCombo}] 下注被服务器明确拒绝: {rejectMsg}，释放预占。");
+                                    }
                                 }
                                 _Log.LogInfo($"发送下注第[{RequestNo}]笔...");
                             }
@@ -1338,9 +1682,17 @@ namespace AutoHorseRace
         /// <summary>
         /// 自动吃票处理
         /// </summary>
+        /// <summary>
+        /// 自动吃票处理
+        /// </summary>
         public void AutoEatProcess(List<BetInfo> BetBetInfos, string type, string targetCombo = null)
         {
             if (BetBetInfos == null || BetBetInfos.Count == 0 || string.IsNullOrEmpty(targetCombo)) return;
+            if (!TryGetTradeTimeContext(out _, out _, out DateTime triggerEndTime) || DateTime.Now >= triggerEndTime)
+            {
+                _logger.Debug($"[{type}][{targetCombo}] 已达到正常下注截止时间，跳过 EAT。");
+                return;
+            }
             string dictKey = ComboTradeState.BuildDictKey(_Config.CurrentRaceNo, type, targetCombo);
             object eatLock = _eatLocks.GetOrAdd(dictKey, _ => new object());
             _logger.Debug($"[诊断] AutoEatProcess targetCombo原始值='{targetCombo}' 长度={targetCombo.Length} 拼出dictKey='{dictKey}'");
@@ -1367,7 +1719,10 @@ namespace AutoHorseRace
                     bool isQStake = string.Equals(type, "Q");
                     int configSpread = isQStake ? _Config.QEatSpread : _Config.QPEatSpread;
                     int configStakeAmount = isQStake ? _Config.QStakeAmount : _Config.QPStakeAmount;
-                    var bestBet = BetBetInfos.Where(b => string.Equals(b.combo, targetCombo)).OrderBy(b => b.odds).FirstOrDefault();
+                    var bestBet = BetBetInfos
+                        .Where(b => string.Equals(b.combo, targetCombo))
+                        .OrderBy(b => b.odds)
+                        .FirstOrDefault();
                     if (bestBet == null)
                     {
                         _logger.Debug($"[{targetCombo}] 当前候选记录未满足吃票条件");
@@ -1379,16 +1734,57 @@ namespace AutoHorseRace
                         bestBet.odds = configSpread + (int)state.BetOdds;
                     }
                     bestBet.stakeAmount = configStakeAmount;
-                    double stake = Math.Min(_decisionEngine.GetRemainingEatAmount(state), bestBet.stakeAmount);
-                    if (stake <= 0)
+                    double engineRemaining = _decisionEngine.GetRemainingEatAmount(state);
+                    double hardRemaining = state.GetHardRemainingEatAmount();
+                    double requestedStake = Math.Min(
+                        Math.Min(engineRemaining, hardRemaining),
+                        configStakeAmount);
+                    _logger.Debug(
+                        $"[EAT-AUDIT] [{dictKey}] " +
+                        $"BET_EXEC={state.BetExecuted:F3} | " +
+                        $"EAT_EXEC={state.EatExecuted:F3} | " +
+                        $"EAT_PENDING={state.EatPending:F3} | " +
+                        $"EFFECTIVE_EAT={state.EffectiveEatCommitted:F3} | " +
+                        $"ENGINE_REMAIN={engineRemaining:F3} | " +
+                        $"HARD_REMAIN={hardRemaining:F3} | " +
+                        $"REQUEST={requestedStake:F3}");
+                    if (requestedStake <= 0)
                     {
-                        _logger.Debug($"[{dictKey}] 剩余需吃金额为0（可能已有预占/已吃满），跳过本次吃票");
+                        _logger.Debug($"[{dictKey}] 剩余可吃金额为0，跳过本次吃票");
                         return;
                     }
-                    // 🔧 之前这里"预占 -> 提交 -> 处理结果"这一整段被原样复制了两遍，
-                    // 导致每次触发吃票实际上会向交易所提交两次一模一样的请求。现在只保留一份。
-                    _logger.Debug($"🔥 触发吃票！组合: {bestBet.combo} | 水折: {bestBet.odds} | 本次吃: {stake}");
-                    string intentId = state.ReserveEatIntent(stake, TimeSpan.FromSeconds(60));
+                    if (!state.TryReserveEatIntent(
+                            requestedStake,
+                            TimeSpan.FromSeconds(60),
+                            out string intentId,
+                            out double reservedStake))
+                    {
+                        _logger.Warn(
+                            $"[EAT-BLOCK] [{dictKey}] 原子预占失败，禁止吃票。" +
+                            $"BET_EXEC={state.BetExecuted:F3}, " +
+                            $"EAT_EXEC={state.EatExecuted:F3}, " +
+                            $"EAT_PENDING={state.EatPending:F3}, " +
+                            $"EFFECTIVE_EAT={state.EffectiveEatCommitted:F3}, " +
+                            $"HARD_REMAIN={state.GetHardRemainingEatAmount():F3}, " +
+                            $"REQUEST={requestedStake:F3}");
+                        return;
+                    }
+                    if (reservedStake + 0.001 < requestedStake)
+                    {
+                        state.ReleaseEatIntent(intentId);
+                        _logger.Warn(
+                            $"[EAT-BLOCK] [{dictKey}] 原子预占金额被裁剪。" +
+                            $"REQUEST={requestedStake:F3}, RESERVED={reservedStake:F3}，" +
+                            $"为避免订单金额与预占金额不一致，本次取消下单。");
+                        return;
+                    }
+                    double finalStake = reservedStake;
+                    _logger.Warn(
+                        $"[EAT-SEND] [{dictKey}] " +
+                        $"BET_EXEC={state.BetExecuted:F3} | " +
+                        $"EFFECTIVE_EAT_BEFORE={state.EffectiveEatCommitted - finalStake:F3} | " +
+                        $"HARD_REMAIN_BEFORE={state.GetHardRemainingEatAmount() + finalStake:F3} | " +
+                        $"STAKE={finalStake:F3}");
                     try
                     {
                         var pendingInfo = new EatBetInfo
@@ -1398,19 +1794,40 @@ namespace AutoHorseRace
                             raceNo = _Config.CurrentRaceNo,
                             type = type,
                             combo = targetCombo,
-                            eatPendingAmount = stake,
-                            totalEatAmount = stake,
+                            eatPendingAmount = finalStake,
+                            totalEatAmount = finalStake,
                             eatOdds = bestBet.odds
                         };
+                        bestBet.stakeAmount = (int)finalStake;
+                        if (DateTime.Now >= triggerEndTime)
+                        {
+                            state.ReleaseEatIntent(intentId);
+                            _logger.Debug($"[{targetCombo}] EAT 发送前已达到正常下注截止[{triggerEndTime:HH:mm:ss}]，取消本次 EAT。");
+                            return;
+                        }
                         JObject result = ExecuteTrade(pendingInfo, bestBet, "P", "Y");
                         if (IsOrderAccepted(result))
                         {
-                            _Log.LogInfo($"[{targetCombo}] 吃票指令已发送");
+                            _Log.LogInfo(
+                                $"[{targetCombo}] 吃票指令已发送 | amount={finalStake:F3} | " +
+                                $"BET_EXEC={state.BetExecuted:F3} | " +
+                                $"EFFECTIVE_EAT={state.EffectiveEatCommitted:F3}");
                         }
                         else
                         {
-                            state.ReleaseEatIntent(intentId);
-                            _logger.Warn($"[{targetCombo}] 吃票未被接受，释放预占");
+                            if (result == null)
+                            {
+                                _logger.Warn(
+                                    $"[{targetCombo}] 吃票请求异常（网络超时/连接失败/响应解析失败），" +
+                                    $"保留预占等待服务器快照核实，避免误判后重复下单。");
+                            }
+                            else
+                            {
+                                string rejectMsg = result["message"]?.ToString() ?? "未知拒绝原因";
+                                state.ReleaseEatIntent(intentId);
+                                _logger.Warn(
+                                    $"[{targetCombo}] 吃票被服务器明确拒绝: {rejectMsg}，释放预占。");
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -1490,15 +1907,49 @@ namespace AutoHorseRace
         /// 强迫策略，逐步增加水折平仓
         /// </summary>
         /// <param name="bettingInfoDict"></param>
-        /// <param name="EATBetInfos"></param>
+        /// <param name="BETBetInfos">
+        /// market 上别人挂出来的"赌"(BET)单——即我方即将提交的"吃"(EAT)单真正要撮合的对手盘。
+        /// 调用方必须传 queryMarket 返回的 Q_BETBetInfos/QP_BETBetInfos，不能传 EAT 侧数据
+        /// （EAT 侧是别人也在等吃、跟我方同边，不是可撮合的对手盘，会导致几乎所有 combo 都
+        /// 精确匹配不到，参见下面 [强平诊断] 日志）。
+        /// </param>
         /// <param name="type"></param>
-        public void ClosePositionByDeadline(Dictionary<string, IDictionary<string, string>> bettingInfoDict, List<BetInfo> EATBetInfos, string type)
+        public void ClosePositionByDeadline(Dictionary<string, IDictionary<string, string>> bettingInfoDict, List<BetInfo> BETBetInfos, string type)
         {
             if (bettingInfoDict == null || bettingInfoDict.Count == 0)
             {
                 return;
             }
-            _Log.LogInfo($"EATBetInfos[{EATBetInfos?.Count ?? 0}],开始处理强平...");
+            _Log.LogInfo($"BETBetInfos[{BETBetInfos?.Count ?? 0}],开始处理强平...");
+
+            // 🔧 诊断：真正决定"某个组合是否会实际下强平单"的关键一步，是后面 Parallel.ForEach
+            // 里 `BETBetInfos.Where(b => string.Equals(comboKey, b.combo))` 这行精确字符串匹配——
+            // 如果 queryMarket 返回的盘口数据里，这个 combo 的命名格式（马号顺序、是否带括号、
+            // 有无多余空格等）跟 TradeStateStore 内部的 Combo 格式对不上，就会匹配不到，
+            // 只留下一行不痛不痒的"分析数据[无]"，看不出到底是"没报价"还是"格式不一致"。
+            // 这里在批处理开始前，对 bettingInfoDict 里的每个 combo 统一做一次全量核对并提前列出来，
+            // 避免等到 Parallel.ForEach 并发写日志、可能被截断/看不全。
+            var eatComboSet = new HashSet<string>((BETBetInfos ?? new List<BetInfo>()).Select(b => b.combo));
+            foreach (var comboKeyToCheck in bettingInfoDict.Keys)
+            {
+                if (eatComboSet.Contains(comboKeyToCheck)) continue;
+                string normalized = comboKeyToCheck.Trim('(', ')', ' ');
+                string reversed = normalized.Contains('-')
+                    ? string.Join("-", normalized.Split('-').Reverse())
+                    : normalized;
+                var nearMatches = eatComboSet
+                    .Where(c => string.Equals((c ?? "").Trim('(', ')', ' '), normalized, StringComparison.Ordinal)
+                             || string.Equals(c, reversed, StringComparison.Ordinal)
+                             || string.Equals((c ?? "").Trim('(', ')', ' '), reversed, StringComparison.Ordinal))
+                    .ToList();
+                _logger.Warn(
+                    $"[强平诊断][{type}][{comboKeyToCheck}] 在本轮市场 BET 侧数据[{eatComboSet.Count}个不同combo]中找不到精确匹配 b.combo=='{comboKeyToCheck}'，" +
+                    $"稍后会走入'分析数据[无]'分支、不会下单。" +
+                    (nearMatches.Count > 0
+                        ? $" 发现疑似格式不一致的近似匹配: [{string.Join(", ", nearMatches)}]，请核对 combo 命名格式（顺序/括号/空格）是否一致。"
+                        : " 且未发现任何近似格式的candidate，该组合本轮 queryMarket 返回的 BET 侧盘口数据里可能完全没有报价（即当前没有任何人挂'赌'单可供我方'吃'）。"));
+            }
+
             bool isQStake = string.Equals(type, "Q");
             double configSpread = isQStake ? _Config.QEatSpread : _Config.QPEatSpread;
             double configStartOdds = isQStake ? _Config.QStartOdds : _Config.QPStartOdds;
@@ -1513,22 +1964,44 @@ namespace AutoHorseRace
                 string dictKey = ComboTradeState.BuildDictKey(_Config.CurrentRaceNo, type, comboKey);
                 // 🔧 复用 AutoEatProcess 同一把按 dictKey 分片的锁：强平通道和正常吃票通道
                 // 必须互斥，否则两边会各自通过"没有 pending 就可以提交"的检查，导致同一个
-                // combo 被吃两次（本次真实日志里 eatPending 10 -> 20 就是这个原因）。
+                // combo 被吃两次。
                 object eatLock = _eatLocks.GetOrAdd(dictKey, _ => new object());
                 lock (eatLock)
                 {
                     try
                     {
-                        if (_Config.TradeStateStore.TryGet(dictKey, out var state) &&
-                            (state.EffectiveBetPending > 0 || state.EffectiveEatPending > 0))
+                        if (!TryGetTradeTimeContextForClose(DateTime.Now, out _, out _, out DateTime closeStartTime, out DateTime closeEndTime) ||
+                            DateTime.Now < closeStartTime || DateTime.Now >= closeEndTime)
                         {
-                            _logger.Debug($"[{dictKey}] 存在待处理金额，强平跳过");
+                            _logger.Debug($"[{dictKey}] 已离开强平窗口，跳过本组合。");
                             return;
                         }
-                        double.TryParse(itemDict.ContainsKey("bet_odds") ? itemDict["bet_odds"] : "0", out double betOdds);
-                        if (EATBetInfos != null && EATBetInfos.Count > 0)
+                        if (!_Config.TradeStateStore.TryGet(dictKey, out var state))
                         {
-                            var targetEatBetInfo = EATBetInfos.Where(b => string.Equals(comboKey, b.combo)).MinBy(b => b.odds);
+                            _logger.Debug($"[{dictKey}] 无交易记录，强平跳过");
+                            return;
+                        }
+
+                        // 🔧 直接复用 TradeDecisionEngine.ShouldSkip，和 AutoEatProcess 用同一套判断口径。
+                        // 🔧 诊断增强：这里的 state 是在 Parallel.ForEach 内部重新 TryGet 出来的最新快照，
+                        // 跟外层 allStates 过滤时用的快照之间存在时间差（TOCTOU），有可能外层判定"入选"，
+                        // 到这里 ShouldSkip 又因为状态已变化而判定跳过。把当时的关键数值一并打出来，
+                        // 方便和外层"[强平诊断]"那条日志的数值做对比，确认是否真的发生了状态漂移。
+                        if (_decisionEngine.ShouldSkip(state, out string skipReason))
+                        {
+                            _logger.Debug($"[{dictKey}] {skipReason}，强平跳过 | " +
+                                          $"BetExecuted={state.BetExecuted:F3}, EatExecuted={state.EatExecuted:F3}, " +
+                                          $"EffectiveBetPending={state.EffectiveBetPending:F3}, EffectiveEatPending={state.EffectiveEatPending:F3}");
+                            return;
+                        }
+
+                        // 🔥 剩余需要补吃的精确金额，用于下单量裁剪，避免超过实际缺口
+                        double remainingEatAmount = _decisionEngine.GetRemainingEatAmount(state);
+
+                        double.TryParse(itemDict.ContainsKey("bet_odds") ? itemDict["bet_odds"] : "0", out double betOdds);
+                        if (BETBetInfos != null && BETBetInfos.Count > 0)
+                        {
+                            var targetEatBetInfo = BETBetInfos.Where(b => string.Equals(comboKey, b.combo)).MinBy(b => b.odds);
                             if (targetEatBetInfo != null)
                             {
                                 if (targetEatBetInfo.odds > 81)
@@ -1536,8 +2009,37 @@ namespace AutoHorseRace
                                     targetEatBetInfo.odds = targetEatBetInfo.odds - 1;
                                 }
                                 targetEatBetInfo.action = "BET";
+                                // 🔒 强平也必须经过与 AutoEatProcess 相同的原子 EAT 上限检查，防止正常吃票与强平并发超发。
                                 var comboState = _Config.TradeStateStore.GetOrCreate(_Config.CurrentRaceNo, type, comboKey);
-                                string intentId = comboState.ReserveEatIntent(targetEatBetInfo.stakeAmount, TimeSpan.FromSeconds(60));
+                                double requestedStake = Math.Min(remainingEatAmount, configStakeAmount);
+                                if (requestedStake <= AmountEpsilon)
+                                {
+                                    // 🔧 诊断：原来这里是纯静默 return，如果 remainingEatAmount 在这一刻
+                                    // 被算成 <=0（哪怕外层 allStates 判断时是 >0，同样可能是 TOCTOU 状态漂移
+                                    // 导致），之前完全没有任何日志能解释这个组合为什么没有下强平单。
+                                    _logger.Debug($"[{dictKey}] 强平跳过：remainingEatAmount={remainingEatAmount:F3}, " +
+                                                  $"configStakeAmount={configStakeAmount:F3} ⇒ requestedStake={requestedStake:F3} <= {AmountEpsilon}，无需下单。");
+                                    return;
+                                }
+                                if (!comboState.TryReserveEatIntent(requestedStake, TimeSpan.FromSeconds(60), out string intentId, out double reservedStake))
+                                {
+                                    _logger.Warn($"[EAT-BLOCK][强平][{dictKey}] 原子预占失败，禁止强平吃票。REQUEST={requestedStake:F3}, HARD_REMAIN={comboState.GetHardRemainingEatAmount():F3}");
+                                    return;
+                                }
+                                if (reservedStake + AmountEpsilon < requestedStake)
+                                {
+                                    comboState.ReleaseEatIntent(intentId);
+                                    _logger.Warn($"[EAT-BLOCK][强平][{dictKey}] 原子预占金额被裁剪。REQUEST={requestedStake:F3}, RESERVED={reservedStake:F3}，取消本次强平下单。");
+                                    return;
+                                }
+                                double actualStake = reservedStake;
+                                targetEatBetInfo.stakeAmount = (int)actualStake;
+                                if (DateTime.Now >= closeEndTime)
+                                {
+                                    comboState.ReleaseEatIntent(intentId);
+                                    _logger.Debug($"[{dictKey}] 强平订单发送前已超过强平窗口结束时间[{closeEndTime:HH:mm:ss}]，取消本次强平 EAT。");
+                                    return;
+                                }
                                 var pendingInfo = new EatBetInfo
                                 {
                                     raceDate = _Config.CurrentRaceDate,
@@ -1545,16 +2047,42 @@ namespace AutoHorseRace
                                     raceNo = _Config.CurrentRaceNo,
                                     type = type,
                                     combo = comboKey,
-                                    eatPendingAmount = targetEatBetInfo.stakeAmount,
-                                    totalEatAmount = targetEatBetInfo.stakeAmount,
+                                    eatPendingAmount = actualStake,
+                                    totalEatAmount = actualStake,
                                     eatOdds = targetEatBetInfo.odds
                                 };
                                 JObject result = ExecuteTrade(pendingInfo, targetEatBetInfo, "M", "SO");
+
+                                // 🔧 关键修复：区分"真正的网络异常/超时"和"服务器明确拒绝"两种情况，
+                                // 不再无差别地对所有失败都保留预占。
+                                //
+                                // 依据 HTTPHelper.singleAutoTrade 的修复：
+                                //   - result == null        → HTTP 请求本身异常、或响应体无法解析为合法 JSON，
+                                //                              这笔单子最终是否成交是"未知"的，必须保留预占，
+                                //                              等下一轮 ApplyServerSnapshot（服务器权威快照）核实，
+                                //                              避免"以为没成交、实际已成交"导致的重复提交和超发。
+                                //   - result != null 且未接受 → 服务器已经正常处理完请求，并给出了明确的业务拒绝
+                                //                              （例如 {"success":false,"message":"...你的交易不成功。"}），
+                                //                              这笔单子确定没有成交。继续保留预占没有意义，只会白白
+                                //                              占用 60 秒 TTL，阻止这个 combo 在下一轮被重新判断和
+                                //                              重试，必须立即释放。
                                 if (!IsOrderAccepted(result))
                                 {
-                                    comboState.ReleaseEatIntent(intentId);
+                                    if (result == null)
+                                    {
+                                        _logger.Warn($"[{dictKey}] 强平市价单请求异常（网络超时/连接失败/响应解析失败），" +
+                                                     $"保留预占等待服务器快照核实，避免误判后重复下单。");
+                                    }
+                                    else
+                                    {
+                                        string rejectMsg = result["message"]?.ToString() ?? "未知拒绝原因";
+                                        comboState.ReleaseEatIntent(intentId);
+                                        _logger.Warn($"[{dictKey}] 强平市价单被服务器明确拒绝: {rejectMsg}，" +
+                                                     $"释放预占，允许下一轮强平重新判断该组合。");
+                                    }
                                 }
-                                _Log.LogInfo($"[强制下注][{type}][{comboKey}][赌注水折{betOdds}]赌作实,吃等待,分析数据[{EATBetInfos.Count}]下吃票[水折{targetEatBetInfo.odds}]");
+
+                                _Log.LogInfo($"[强制下注][{type}][{comboKey}][赌注水折{betOdds}]赌作实,吃等待,分析数据[{BETBetInfos.Count}]下吃票[水折{targetEatBetInfo.odds}][本次吃{actualStake}]");
                             }
                             else
                             {
@@ -1578,11 +2106,24 @@ namespace AutoHorseRace
         /// <param name="orderType">M:市价单,P:挂单</param>
         /// <param name="autoFlag"></param>
         /// <returns></returns>
-        /// 
+        ///
         public JObject ExecuteTrade(dynamic EatBetInfo, dynamic BetInfo, string orderType, string autoFlag)
         {
             string trade_type = string.Equals(BetInfo.action, "EAT") ? "BET" : "EAT";
-            string stakeAmount = string.Equals(BetInfo.type, "Q") ? _Config.QStakeAmount.ToString() : _Config.QPStakeAmount.ToString();
+
+            // 🔧 关键修复：优先使用调用方已经算好（可能经过"剩余缺口裁剪"）的 BetInfo.stakeAmount，
+            // 只有它无效（<=0 或转换失败）时才回退到配置里的固定默认值。
+            // 之前这里无条件用 _Config.QStakeAmount/QPStakeAmount 覆盖，
+            // 会导致 ClosePositionByDeadline 里精心计算的
+            // actualStake = Math.Min(remainingEatAmount, configStakeAmount)
+            // 完全失效——当前场景因为配置金额恰好等于10、且缺口从未小于10才没有暴露问题，
+            // 一旦出现"剩余缺口小于配置金额"（比如部分成交后只差5块）就会按10发送造成超发。
+            int betInfoStake = 0;
+            try { betInfoStake = (int)BetInfo.stakeAmount; } catch { /* dynamic 转换失败时忽略，走默认值 */ }
+            string stakeAmount = betInfoStake > 0
+                ? betInfoStake.ToString()
+                : (string.Equals(BetInfo.type, "Q") ? _Config.QStakeAmount.ToString() : _Config.QPStakeAmount.ToString());
+
             string serverProcessTime = "0ms";
             IDictionary<string, string> BettingMarketData = new Dictionary<string, string>
             {
@@ -1613,28 +2154,52 @@ namespace AutoHorseRace
             }
             if (resultJObject != null)
             {
-                if (string.Equals(autoFlag, "Y"))
+                if (!string.Equals(autoFlag, "N"))
                 {
                     BetInfo.action = trade_type;
                     bool accepted = IsOrderAccepted(resultJObject);
-                    ProcessSubmitOrderResult(EatBetInfo, BetInfo, resultJObject, autoFlag, orderType, accepted);
+
+                    // 🔧 不再自己开 Task.Run 落库：改为丢进统一的 TradeRecordWriter 队列。
+                    // 入队是纯内存操作、几乎不耗时，真正的落库 I/O 由 TradeRecordWriter 的后台
+                    // worker 按 dictKey 分片、严格按提交顺序串行处理，既不占用 betLock/eatLock
+                    // 的持有时间，又和 RefreshTradeListToDB 的周期性落库共用同一条写入通道，
+                    // 彻底避免两条通道互相竞态（详见 TradeRecordWriter.cs 顶部注释）。
+                    string dictKey = ComboTradeState.BuildDictKey((string)BetInfo.raceNo, (string)BetInfo.type, (string)BetInfo.combo);
+                    _tradeRecordWriter.Enqueue(new TradeWriteJob
+                    {
+                        Kind = TradeWriteJobKind.SubmitResult,
+                        DictKey = dictKey,
+                        EatBetInfo = EatBetInfo,
+                        BetInfo = BetInfo,
+                        Result = resultJObject,
+                        AutoFlag = autoFlag,
+                        OrderType = orderType,
+                        Accepted = accepted
+                    });
                 }
                 else
                 {
                     _Log.LogInfo($"[{BetInfo.type}][{BetInfo.combo}][{trade_type}][{BetInfo.odds}][{BetInfo.limit}]手工下注,不更新内存数据");
                 }
             }
-            else
-            {
-                _Log.LogInfo($"[{BetInfo.type}][{BetInfo.combo}][{trade_type}][{BetInfo.odds}][{BetInfo.limit}]下注异常");
-            }
             return resultJObject;
         }
         private bool IsOrderAccepted(JObject resultJObject)
         {
-            return resultJObject != null
-                && resultJObject["success"]?.Value<bool>() == true
-                && resultJObject["data"]?["confirmed"]?.Value<bool>() == true;
+            if (resultJObject == null) return false;
+
+            // 优先看顶层 success（singleAutoTrade / M 单返回的是扁平结构，没有 data 包裹）
+            bool? topLevelSuccess = resultJObject["success"]?.Value<bool>();
+
+            // 如果存在 data.confirmed，按原逻辑（兼容 P 单/submitOrder 可能的嵌套结构）
+            var dataConfirmed = resultJObject["data"]?["confirmed"]?.Value<bool>();
+            if (dataConfirmed.HasValue)
+            {
+                return topLevelSuccess == true && dataConfirmed == true;
+            }
+
+            // 没有 data.confirmed 字段时，直接信任顶层 success
+            return topLevelSuccess == true;
         }
         /// <summary>
         /// 自动下注处理
@@ -1691,7 +2256,16 @@ namespace AutoHorseRace
                     System.Diagnostics.Stopwatch totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
                     _Log.LogInfo("[QP]自动下注处理开始（多线程并行）");
                     // 1. 获取允许的集合
-                    var allowedQPCombos = Utils.Utils.GetAllowedSet(_Config.QPCombos);
+                    // 🔧 QPCombos 配置框里填的是不带括号的 "4-8,4-9,..."（跟 Q 的填写格式保持一致，
+                    // 方便用户输入），GetAllowedSet 解析出来的也是不带括号的纯文本；但 QP（位置Q）
+                    // 这个盘口实际下发的 combo 字段是带括号的，例如 "(4-8)"。如果不在这里统一加上
+                    // 括号，下面 filteredEatGroups 用 allowedQPCombos.Contains(g.Key) 比较时，
+                    // "4-8" 永远匹配不上实际的 "(4-8)"，会把所有 QP 组合都过滤成空，导致 QP 的
+                    // 自动下注/吃票完全不会触发。
+                    var rawAllowedQPCombos = Utils.Utils.GetAllowedSet(_Config.QPCombos);
+                    HashSet<string> allowedQPCombos = rawAllowedQPCombos == null
+                        ? null
+                        : new HashSet<string>(rawAllowedQPCombos.Select(c => $"({c})"));
                     // 2. 分组转字典
                     var eatGroups = QP_EATBetInfos.GroupBy(x => x.combo).ToDictionary(g => g.Key, g => g.ToList());
                     // 3. 动态过滤（若为 null 则直接保留全部）
@@ -1726,13 +2300,22 @@ namespace AutoHorseRace
                 if (string.Equals(_Config.DSServerAddress, _Config.EAServerAddress))
                 {
                     BetBatInfos = HTTPHelper.queryMarket(_Config.EAServerAddress, _EAAccount.UserCode, _Config.CurrentRaceDate, _Config.CurrentRaceType, _Config.CurrentRaceNo, out serverProcessTime);
-                    _Log.LogInfo($"[性能监控][RefreshBetInfoDataList][queryMarket] 后端服务耗时: {serverProcessTime}");
                 }
                 else
                 {
                     BetBatInfos = HTTPHelper.queryMarket(_Config.DSServerAddress, _DSAccount.UserCode, _Config.CurrentRaceDate, _Config.CurrentRaceType, _Config.CurrentRaceNo, out serverProcessTime);
-                    _Log.LogInfo($"[性能监控][RefreshBetInfoDataList][queryMarket] 后端服务耗时: {serverProcessTime}");
                 }
+
+                // 🔧 网络请求存在耗时，执行到这里时墙钟时间可能已经越过 triggerEndTime，
+                // 此时强平通道很可能已经并行启动。为避免两条通道同时对同一批 combo 各判各的、
+                // 各提交各的，这里用最新时间再校验一次，一旦越界就直接放弃本轮 AutoBetting，
+                // 把这批 combo 完全交给强平通道处理。
+                if (DateTime.Now >= triggerEndTime)
+                {
+                    _Log.LogInfo($"[{DateTime.Now:HH:mm:ss}] queryMarket 期间已达到下注截止[{triggerEndTime:HH:mm:ss}]，本轮跳过正常 AutoBetting，交由强平通道接管");
+                    return;
+                }
+
                 if (BetBatInfos == null || BetBatInfos.Count == 0)
                 {
                     _Log.LogInfo("queryMarket 数据为空");
@@ -1744,6 +2327,11 @@ namespace AutoHorseRace
                     {
                         _Log.LogInfo("自动下注处理开始");
                         RefreshMyTradeSnapshot();
+                        if (DateTime.Now >= triggerEndTime)
+                        {
+                            _Log.LogInfo($"[{DateTime.Now:HH:mm:ss}] queryMyTrade 期间已达到下注截止[{triggerEndTime:HH:mm:ss}]，跳过本轮 AutoBetting，交由强平通道接管");
+                            return;
+                        }
                         AutoBetting(BetBatInfos);
                         _Log.LogInfo("自动下注处理结束");
                     }
@@ -1759,14 +2347,20 @@ namespace AutoHorseRace
                 {
                     HandleBeforeTradeTime(now, triggerStartTime);
                 }
-                else if (now > triggerEndTime && now <= raceDateTime)
+                // V20260913_CLOSE_WINDOW_EXTEND：强平窗口已延长到开赛后 30 秒（见 TryGetTradeTimeContextForClose
+                // 的 closeEndTime），这里判断"是否需要检查/启动强平定时器"的右边界也要跟着放宽到
+                // raceDateTime.AddSeconds(30)，否则开赛后到强平窗口真正结束这段时间会漏检。
+                else if (now >= triggerEndTime && now < raceDateTime.AddSeconds(30))
                 {
                     CheckAndStartClosePosition(now);
                 }
-                else if (now > raceDateTime.AddSeconds(30))
+                // V20260913_AUTO_NEXT_RACE_DELAY：自动转场从"开赛后 30 秒"延后到"开赛后 60 秒"，
+                // 留出更充分的时间让强平窗口（开赛后 30 秒结束）先跑完最后一轮，避免转场把
+                // 还没来得及处理完的强平定时器/状态提前清掉。
+                else if (now > raceDateTime.AddSeconds(60))
                 {
-                    _Log.LogInfo($"超过开赛时间3秒钟,启动自动转场");
-                    _Log.LogInfo($"[{now.ToString("yyyy-MM-dd HH:mm:ss")}]超过开赛时间[{raceDateTime.AddMinutes(3).ToString("yyyy-MM-dd HH:mm:ss")}]");
+                    _Log.LogInfo($"超过开赛时间60秒,启动自动转场");
+                    _Log.LogInfo($"[{now.ToString("yyyy-MM-dd HH:mm:ss")}]超过开赛时间[{raceDateTime.AddSeconds(60).ToString("yyyy-MM-dd HH:mm:ss")}]");
                     AutoToNextRace();
                 }
             }
@@ -1800,7 +2394,7 @@ namespace AutoHorseRace
             triggerStartTime = raceDateTime.AddMinutes(-startDuration);
             triggerEndTime = raceDateTime.AddSeconds(-endDuration);
             // 直接在方法内判断并返回结果
-            return now >= triggerStartTime && now <= triggerEndTime;
+            return now >= triggerStartTime && now < triggerEndTime;
         }
         /// <summary>
         /// 处理未到下注时间的逻辑
@@ -1814,25 +2408,28 @@ namespace AutoHorseRace
         /// </summary>
         private void CheckAndStartClosePosition(DateTime now)
         {
-            string todayStr = now.ToString("yyyy-MM-dd");
-            string fullRaceTimeStr = $"{todayStr} {_Config.CurrentRaceTime}:00";
-            if (DateTime.TryParseExact(fullRaceTimeStr, "yyyy-MM-dd HH:mm:ss",
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out DateTime raceDateTime))
+            if (!TryGetTradeTimeContextForClose(now, out DateTime raceDateTime, out DateTime normalBetEndTime, out DateTime closeStartTime, out DateTime closeEndTime)) return;
+            if (now < closeStartTime || now >= closeEndTime) return;
+            if (!_timerRefreshBetInfoForClosePosition.IsRunning)
             {
-                // 跨天智能修正逻辑
-                if (now.Hour >= 20 && raceDateTime.Hour < 6)
-                {
-                    raceDateTime = raceDateTime.AddDays(1);
-                }
-                DateTime triggerEndTimeForClose = raceDateTime.AddSeconds(-_Config.AutoTradeEndTimeDuration);
-                // 🌟 如果强平定时器还没运行，直接启动它
-                if (!_timerRefreshBetInfoForClosePosition.IsRunning)
-                {
-                    _Log.LogInfo($"[{now.ToString("yyyy-MM-dd HH:mm:ss")}] 当前时间已过下注结束时间 [{triggerEndTimeForClose:yyyy-MM-dd HH:mm:ss}]，正式启动自动强平/平仓定时器");
-                    _timerRefreshBetInfoForClosePosition.Start();
-                }
+                _Log.LogInfo($"[{now:yyyy-MM-dd HH:mm:ss}] 正常下注截止[{normalBetEndTime:yyyy-MM-dd HH:mm:ss}]，10秒缓冲后进入强平[{closeStartTime:yyyy-MM-dd HH:mm:ss}]，强平窗口至[{closeEndTime:yyyy-MM-dd HH:mm:ss}]结束，启动自动强平/平仓定时器");
+                _timerRefreshBetInfoForClosePosition.Start();
             }
+        }
+        // V20260913_CLOSE_WINDOW_EXTEND：新增 closeEndTime 出参 = 开赛时间（raceDateTime）+30 秒，
+        // 强平窗口由原来的 [closeStartTime, raceDateTime) 延长为 [closeStartTime, closeEndTime)，
+        // 所有引用本方法判断"是否还在强平窗口内"的调用点都必须改用 closeEndTime 作为窗口右边界，
+        // 而不是继续用 raceDateTime（那样窗口就还是没延长，等于没改）。
+        private bool TryGetTradeTimeContextForClose(DateTime now, out DateTime raceDateTime, out DateTime normalBetEndTime, out DateTime closeStartTime, out DateTime closeEndTime)
+        {
+            raceDateTime = default; normalBetEndTime = default; closeStartTime = default; closeEndTime = default;
+            string fullRaceTimeStr = $"{now:yyyy-MM-dd} {_Config.CurrentRaceTime}:00";
+            if (!DateTime.TryParseExact(fullRaceTimeStr, "yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out raceDateTime)) return false;
+            if (now.Hour >= 20 && raceDateTime.Hour < 6) raceDateTime = raceDateTime.AddDays(1);
+            normalBetEndTime = raceDateTime.AddSeconds(-_Config.AutoTradeEndTimeDuration);
+            closeStartTime = normalBetEndTime.AddSeconds(10);
+            closeEndTime = raceDateTime.AddSeconds(30);
+            return true;
         }
         private async void buttonAccountLogin_Click(object sender, EventArgs e)
         {
@@ -2505,60 +3102,16 @@ namespace AutoHorseRace
                 {
                     continue;
                 }
-                try
+                // 🔧 不再自己直接写库：统一交给 TradeRecordWriter，跟 ExecuteTrade 的实时落库共用
+                // 同一条按 dictKey 分片、严格串行的写入通道，彻底消除"两条通道同时写同一个
+                // TradeRecordId"导致的外键竞态（原来靠 ResetTradeRecordId() 硬扛的那个问题）。
+                // 失败重试 / 死信日志 / TradeRecordId 失效后的重置，全部下沉到 TradeRecordWriter 里统一处理。
+                _tradeRecordWriter.Enqueue(new TradeWriteJob
                 {
-                    // 顺手把 raceType/raceDate/raceNo 也改成从 trade 自己取，跟之前 TradeStateStore 那处是同一类问题
-                    DBHelper.saveTradeDetailLog(_EAAccount, trade.raceType, trade.raceDate, trade.raceNo,
-                        state.TradeRecordId, "P", "Y", trade, "Auto Refresh");
-                }
-                catch (MySql.Data.MySqlClient.MySqlException ex) when (ex.Message.Contains("foreign key constraint"))
-                {
-                    // trade_record_id 指向的 hr_trade_record 行已经不存在了（比如被"删除挂单"清理掉了）。
-                    // 本地缓存的这个ID已经失效，重置掉，避免每8秒都拿同一个坏ID反复报同一个错。
-                    _logger.Warn($"[{dictKey}] TradeRecordId={state.TradeRecordId} 已不存在于数据库，重置缓存");
-                    state.ResetTradeRecordId();
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error($"[{dictKey}] 写入交易明细失败: {ex.Message}");
-                }
-            }
-        }
-        // 可以作为类级别的静态只读字典，或者写在方法内部
-        private static readonly Dictionary<string, string> AutoFlagDescriptions = new Dictionary<string, string>
-        {
-            { "Y", "自动" },
-            { "SO", "强制" },
-            { "N", "手动" }
-        };
-        public void ProcessSubmitOrderResult(EatBetInfo eatBetInfo, BetInfo betInfo, JObject resultJObject, string autoFlag, string orderType, bool accepted)
-        {
-            if (betInfo != null)
-            {
-                string tradeAction = betInfo.action == "BET" ? "赌" : "吃";
-                betInfo.status = accepted ? "SUCCESS" : "REJECTED";
-                betInfo.remark = resultJObject["message"]?.ToString() ?? string.Empty;
-                if (string.Equals(autoFlag, "SO"))
-                {
-                    betInfo.remark = "[强平]" + betInfo.remark;
-                }
-                string raceNo = betInfo.raceNo;
-                string flagDesc = AutoFlagDescriptions.TryGetValue(autoFlag ?? "", out var desc) ? desc : "手动";
-                _Log.LogTradeRecord(
-                    _EAAccount.UserCode,
-                    $"[{flagDesc}]  场次:{raceNo}  马号:{betInfo.combo}  类型:{betInfo.type}{tradeAction}  金额:{betInfo.stakeAmount}  折头:{betInfo.odds}  状态:{betInfo.status}  返回:{betInfo.remark}"
-                );
-                if (accepted)
-                {
-                    // 🔧 改用 betInfo 自己的 raceType/raceDate，而不是 _Config.CurrentRaceType/CurrentRaceDate，
-                    // 跟 RefreshTradeListToDB / TradeStateStore.WriterLoopAsync 已经修过的是同一类问题：
-                    // 如果提交和落库之间恰好跨了场次切换，_Config.Current* 可能已经变成下一场的值了。
-                    int generatedTradeRecordId = DBHelper.SaveTradeRecord(_EAAccount, betInfo.raceType, betInfo.raceDate, raceNo, eatBetInfo, autoFlag, betInfo.remark);
-                    if (generatedTradeRecordId > 0)
-                    {
-                        DBHelper.saveTradeDetailLog(_EAAccount, betInfo.raceType, betInfo.raceDate, raceNo, generatedTradeRecordId, orderType, autoFlag, betInfo, betInfo.remark);
-                    }
-                }
+                    Kind = TradeWriteJobKind.PeriodicRefresh,
+                    DictKey = dictKey,
+                    BetInfo = trade
+                });
             }
         }
         private void checkBoxAutoBetting_CheckedChanged(object sender, EventArgs e)
@@ -2884,7 +3437,19 @@ namespace AutoHorseRace
             }
         }
         /// <summary>
-        /// 刷新下注列表数据，数据来源位本地数据库
+        /// 刷新下注列表数据，数据来源为本地数据库。
+        ///
+        /// 🔧 已回退"改读内存 _EatBetInfosList"的调整：实测发现只要一个组合还没有产生任何
+        /// "吃"的成交（比如截图里的场景——3 个组合都只提交了 BET、吃笔数=0），
+        /// Utils.Utils.GetBatBetInfo(...) 生成的 _EatBetInfosList/_EatBetInfoDict 里就不会包含
+        /// 这些组合（或者字段填充不满足表格列绑定的预期），导致表格整体空白——但数据库里
+        /// （及 TradeStateStore 内存状态里）其实已经正确记录了这些下注。
+        /// 由于目前没有 Utils.Utils.GetBatBetInfo 的源码，无法确认它具体按什么口径过滤/构造
+        /// _EatBetInfosList，为避免继续猜测导致界面再次出问题，这里先改回从数据库查询展示，
+        /// 恢复到已验证可用的状态。如果之后要重新尝试"读内存以避免落库延迟"，需要先拿到
+        /// Utils.Utils.GetBatBetInfo（或 EatBetInfo 类定义）的源码，确认它是否遗漏了"只有赌、
+        /// 还没吃"的组合，再按 ComboTradeState（这个是全量、权威的每组合状态）重新构造展示用的
+        /// EatBetInfo 列表，而不是直接依赖 _EatBetInfosList。
         /// </summary>
         private void RefreshBettingInfoDataList()
         {
