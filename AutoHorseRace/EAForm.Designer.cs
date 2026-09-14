@@ -849,6 +849,7 @@
             buttonTestBet.TabIndex = 58;
             buttonTestBet.Text = "手动下注";
             buttonTestBet.UseVisualStyleBackColor = true;
+            buttonTestBet.Visible = false;
             buttonTestBet.Click += buttonTestBet_Click;
             // 
             // listBoxOrderLogList
@@ -1456,7 +1457,7 @@
             // EAForm
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.None;
             ClientSize = new Size(865, 919);
             Controls.Add(groupBox3);
             Controls.Add(groupBox2);
