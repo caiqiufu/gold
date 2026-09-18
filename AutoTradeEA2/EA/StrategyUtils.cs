@@ -634,6 +634,8 @@ namespace uClient.Broker
                 managePosition.configParam.Add("ATRPeriod", _Config.SysConfig["dukascopy.atrPeriod"]);
                 managePosition.configParam.Add("TrendCount", _Config.SysConfig["dukascopy.trendCount"]);
                 managePosition.configParam.Add("EMAPriceDiff", "5");
+                managePosition.configParam.Add("keepProfit", _StrategyConfig.keepProfit.ToString());
+                managePosition.configParam.Add("stopLoss", _StrategyConfig.stopLoss.ToString());
                 _EAConfig.EAList.Add(managePosition);
                 _EAConfig.EA.Add(managePosition.code, managePosition);
 

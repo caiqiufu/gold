@@ -17,6 +17,10 @@ namespace AutoHorseRace
         /// </summary>
         public string BrokerName { set; get; } = string.Empty;
         /// <summary>
+        /// 交易商服务器地址
+        /// </summary>
+        public string BrokerServer { set; get; } = string.Empty;
+        /// <summary>
         /// 账户类型 Demo/Live
         /// </summary>
         public string Type { set; get; } = string.Empty;

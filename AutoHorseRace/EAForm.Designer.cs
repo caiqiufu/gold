@@ -408,16 +408,16 @@
             // 
             // pictureBoxDSLoginProcessing
             // 
-            pictureBoxDSLoginProcessing.Location = new Point(518, 31);
+            pictureBoxDSLoginProcessing.Location = new Point(704, 34);
             pictureBoxDSLoginProcessing.Name = "pictureBoxDSLoginProcessing";
-            pictureBoxDSLoginProcessing.Size = new Size(28, 28);
+            pictureBoxDSLoginProcessing.Size = new Size(23, 25);
             pictureBoxDSLoginProcessing.TabIndex = 63;
             pictureBoxDSLoginProcessing.TabStop = false;
             pictureBoxDSLoginProcessing.Paint += pictureBoxDSLoginProcessing_Paint;
             // 
             // buttonTradeRecords
             // 
-            buttonTradeRecords.Location = new Point(552, 3);
+            buttonTradeRecords.Location = new Point(549, 2);
             buttonTradeRecords.Name = "buttonTradeRecords";
             buttonTradeRecords.Size = new Size(81, 28);
             buttonTradeRecords.TabIndex = 62;
@@ -427,9 +427,9 @@
             // 
             // pictureBoxLoginProcessing
             // 
-            pictureBoxLoginProcessing.Location = new Point(518, 1);
+            pictureBoxLoginProcessing.Location = new Point(518, 4);
             pictureBoxLoginProcessing.Name = "pictureBoxLoginProcessing";
-            pictureBoxLoginProcessing.Size = new Size(28, 28);
+            pictureBoxLoginProcessing.Size = new Size(26, 24);
             pictureBoxLoginProcessing.TabIndex = 61;
             pictureBoxLoginProcessing.TabStop = false;
             pictureBoxLoginProcessing.Paint += pictureBoxLoginProcessing_Paint;
@@ -447,7 +447,7 @@
             // 
             // buttonDSLogin
             // 
-            buttonDSLogin.Location = new Point(435, 32);
+            buttonDSLogin.Location = new Point(621, 32);
             buttonDSLogin.Name = "buttonDSLogin";
             buttonDSLogin.Size = new Size(81, 28);
             buttonDSLogin.TabIndex = 27;
@@ -458,17 +458,16 @@
             // textBoxDSAccountPin
             // 
             textBoxDSAccountPin.BorderStyle = BorderStyle.FixedSingle;
-            textBoxDSAccountPin.Location = new Point(352, 35);
+            textBoxDSAccountPin.Location = new Point(502, 35);
             textBoxDSAccountPin.Name = "textBoxDSAccountPin";
-            textBoxDSAccountPin.PasswordChar = '*';
-            textBoxDSAccountPin.Size = new Size(78, 23);
+            textBoxDSAccountPin.Size = new Size(115, 23);
             textBoxDSAccountPin.TabIndex = 25;
             // 
             // label11
             // 
             label11.AutoSize = true;
             label11.Font = new Font("Microsoft YaHei", 10.5F);
-            label11.Location = new Point(314, 36);
+            label11.Location = new Point(461, 36);
             label11.Name = "label11";
             label11.Size = new Size(37, 20);
             label11.TabIndex = 26;
@@ -477,17 +476,16 @@
             // textBoxDSAccountPassword
             // 
             textBoxDSAccountPassword.BorderStyle = BorderStyle.FixedSingle;
-            textBoxDSAccountPassword.Location = new Point(207, 35);
+            textBoxDSAccountPassword.Location = new Point(247, 35);
             textBoxDSAccountPassword.Name = "textBoxDSAccountPassword";
-            textBoxDSAccountPassword.PasswordChar = '*';
-            textBoxDSAccountPassword.Size = new Size(100, 23);
+            textBoxDSAccountPassword.Size = new Size(211, 23);
             textBoxDSAccountPassword.TabIndex = 23;
             // 
             // label12
             // 
             label12.AutoSize = true;
             label12.Font = new Font("Microsoft YaHei", 10.5F);
-            label12.Location = new Point(166, 36);
+            label12.Location = new Point(209, 36);
             label12.Name = "label12";
             label12.Size = new Size(37, 20);
             label12.TabIndex = 24;
@@ -498,7 +496,7 @@
             textBoxDSAccountCode.BorderStyle = BorderStyle.FixedSingle;
             textBoxDSAccountCode.Location = new Point(57, 35);
             textBoxDSAccountCode.Name = "textBoxDSAccountCode";
-            textBoxDSAccountCode.Size = new Size(100, 23);
+            textBoxDSAccountCode.Size = new Size(148, 23);
             textBoxDSAccountCode.TabIndex = 21;
             // 
             // label13
@@ -1456,7 +1454,6 @@
             // 
             // EAForm
             // 
-            AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.None;
             ClientSize = new Size(865, 919);
             Controls.Add(groupBox3);

@@ -5,11 +5,64 @@ using NLog;
 using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Text.RegularExpressions;
+// ============================================================================
+// V20260918_CODE_REVIEW_FIXES：本次代码走查后应用的修改，供后续维护对照：
+// 1. 三个登陆/扫描动画不再共用同一个 _ProcessingAngle 字段，避免多个定时器同时
+//    启用时互相干扰转速（拆分为 _scanProcessingAngle / _loginProcessingAngle /
+//    _dsLoginProcessingAngle 三个独立字段）。
+// 2. QueryEATBETInfoDataForClosePositionAsync 不再重复实现一遍窗口时间计算，
+//    改为直接调用 TryGetTradeTimeContextForClose，避免两处逻辑将来改一处漏一处。
+// 3. UpdateAccountBalanceInfo 由 async void 改为 async Task 并在
+//    QueryBalanceDataAsync 中 await，同时给余额字段解析加了 try/catch，
+//    避免响应结构异常时在 async void 里抛出未处理异常导致进程崩溃。
+// 4. ExecuteTrade 的 dynamic 参数改回强类型 EatBetInfo/BetInfo，去掉 DLR 调用开销
+//    并恢复编译期类型检查（所有调用方本来传入的就是这两个具体类型）。
+// 5. QueryAndApplyMyTradeSnapshotAsync 里的调试日志改为先判断
+//    _logger.IsDebugEnabled 再做 JsonConvert.SerializeObject(Formatting.Indented)，
+//    避免 Debug 级别关闭时仍白白执行大对象的格式化序列化（每轮轮询都会执行）。
+// 6. [EAT-SEND] 常规下单日志由 _logger.Warn 降级为 _logger.Info，避免正常业务
+//    事件淹没 Warn/Error 监控信号。
+// 7. AutoBetting / ClosePositionByDeadline 里的 Parallel.ForEach 增加
+//    MaxDegreeOfParallelism 上限（MaxComboParallelism 常量），避免 combo 数量变多后
+//    并发打满线程池、影响其它定时器任务（HTTP 均为阻塞调用）的调度。
+// 8. V20260918_STOP_SCAN_ON_DISCONNECT：打水(EA)/读水(DS)账号在余额轮询中被判定为
+//    自动断链时（ShowAccountDisconnectedPrompt），如果此时自动扫描仍处于"已启动"状态，
+//    会自动调用 UpdateQueryEATBETInfoStatus("扫描已停止") 显式停掉扫描。之前断链只会
+//    弹窗提示、把账号 IsLogin 置为 false，但扫描定时器和按钮状态都不会跟着变——扫描
+//    按钮表面还显示"已启动"，实际上每一轮都会因为 IsLogin=false 在最前面直接 return，
+//    等于空转，容易让人误以为系统仍在正常工作而没有及时去重新登陆。
+// 9. V20260918_DS_MULTI_ACCOUNT_DISCONNECT：在第 8 条基础上，把读水侧的自动断链检测
+//    从"只查 _DSAccounts 里第一个账户"扩展为"遍历所有已登录的读水账户逐个查询余额"
+//    （QueryBalanceDataAsync），任意一个账户查询失败/异常都会独立触发它自己的断链判定
+//    与停止扫描，不会被其它账户仍然在线掩盖。相应地：
+//      - UpdateAccountBalanceInfo 新增 dsAccount 参数，可对指定的某个读水账户查询；
+//      - "已提示过断链"标记由单个 bool（_dsDisconnectNotified）改成按 UserCode 去重的
+//        HashSet（_dsDisconnectNotifiedUserCodes），每个账户独立提示、独立恢复；
+//      - HandleAccountDisconnected / ShowAccountDisconnectedPrompt / ResetAccountDisconnectedNotifyFlag
+//        都新增 account 参数，标明具体是哪个账户；
+//      - 界面上仍然只有一组共享的"读水余额"控件，只有断链的正好是当前主账户
+//        （_DSAccount，即 _DSAccounts[0]）时才刷新这组控件/把登陆按钮打回"未登陆"，
+//        其它账户断链只记录在它自己的 Account 字段上、只触发停止扫描，不影响共享 UI。
+// 10. V20260918_SAVECONFIG_DS_MULTI_ACCOUNT_FIX：修复一个真实复现的 BUG——SaveConfig()
+//     之前会把 textBoxDSAccountCode/Password/Pin 的原始文本（多账户时是逗号分隔整串，
+//     例如 "rh243,mfhk299"）直接写进 _DSAccount.UserCode/Password/Pin；但 _DSAccount 登陆
+//     后其实和 _DSAccounts[0] 是同一个对象引用，这一写会把该账户 UserCode 从 "rh243"
+//     污染成 "rh243,mfhk299"，导致紧接着 BuildDSAccountsFromInput 按 UserCode 精确匹配
+//     复用旧对象时找不到 "rh243"，只能新建一个 IsLogin=false 的全新对象顶替它——账户
+//     明明已经登陆（例如 buttonDSLogin_Click 刚登陆成功），却在下一次 SaveConfig（比如
+//     切换赛场就会触发）之后被"重置"成未登陆，实测表现为 QueryMarketRace 日志里出现
+//     "跳过未登录账户"、且只影响多账户里的第一个（因为只有 _DSAccount 这一个引用被
+//     污染，后面的账户对象没被碰到）。修复后，多账户原始文本只写入持久化专用的
+//     _MyConfig.DSAccount（不再污染 _DSAccount 本体），并在重新解析 _DSAccounts 后把
+//     _DSAccount 显式指向 _DSAccounts[0]，保持二者引用一致。
+// 以上均为在不改变原有业务语义前提下的走查修复，其余大量并发/幂等相关注释与逻辑
+// （TradeStateStore 原子预占、TradeRecordWriter 串行落库等）均保持不变。
+// ============================================================================
 namespace AutoHorseRace
 {
     public partial class EAForm : Form
     {
-        //后于后端最短timeout为3秒,前端请求必须大于10秒
+        //于后端最短timeout为3秒,前端请求必须大于10秒
         // 1. 在窗体顶部直接声明两个独立的定时器实例
         private RandomTaskTimer _timerRefreshMyTrade;
         private RandomTaskTimer _timerRefreshBetInfo;
@@ -49,9 +102,9 @@ namespace AutoHorseRace
             _timerRefreshBetInfo = new RandomTaskTimer(
                 "业务C_盘口信息",
                 async () => await QueryEATBETInfoDataAsync(),
-                baseDelaySeconds: 3,
+                baseDelaySeconds: 1,
                 randomMinSeconds: 1,
-                randomMaxSeconds: 10
+                randomMaxSeconds: 3
             );
             // 🔧 强平轮询：不在方法内部写循环等待成交，而是靠这个定时器每隔约 5 秒（固定 5 秒 + 0~2 秒随机抖动，
             // 避免多个客户端固定 5 秒整数倍撞车）重新调用一次 QueryEATBETInfoDataForClosePositionAsync，
@@ -65,7 +118,12 @@ namespace AutoHorseRace
                 randomMaxSeconds: 6
             );
         }
-        private float _ProcessingAngle = 0; // 旋转角度
+        // V20260918_CODE_REVIEW_FIXES(1)：原来三个动画共用一个 _ProcessingAngle 字段，
+        // 如果扫描动画和登陆动画同时启用，会互相抢同一个角度值，导致转速/相位都不对。
+        // 拆分成三个独立字段，每个定时器只驱动自己的角度。
+        private float _scanProcessingAngle = 0; // 扫描动画旋转角度
+        private float _loginProcessingAngle = 0; // 打水登陆动画旋转角度
+        private float _dsLoginProcessingAngle = 0; // 读水登陆动画旋转角度
         private System.Windows.Forms.Timer _scanTimer = new System.Windows.Forms.Timer(); // 负责定时触发重绘
         private System.Windows.Forms.Timer _loginTimer = new System.Windows.Forms.Timer(); // 负责定时触发重绘
         private System.Windows.Forms.Timer _DSLoginTimer = new System.Windows.Forms.Timer(); // 负责定时触发重绘
@@ -74,7 +132,7 @@ namespace AutoHorseRace
             _scanTimer.Interval = 30; // 刷新频率，越小越平滑
             _scanTimer.Tick += (s, e) =>
             {
-                _ProcessingAngle = (_ProcessingAngle + 15) % 360; // 每次旋转15度
+                _scanProcessingAngle = (_scanProcessingAngle + 15) % 360; // 每次旋转15度
                 pictureBoxScanProcessing.Invalidate();    // 强制触发 Paint 事件进行重绘
             };
             // 设置 PictureBox 背景为透明，防止盖住界面
@@ -82,7 +140,7 @@ namespace AutoHorseRace
             _loginTimer.Interval = 30; // 刷新频率，越小越平滑
             _loginTimer.Tick += (s, e) =>
             {
-                _ProcessingAngle = (_ProcessingAngle + 15) % 360; // 每次旋转15度
+                _loginProcessingAngle = (_loginProcessingAngle + 15) % 360; // 每次旋转15度
                 pictureBoxLoginProcessing.Invalidate();    // 强制触发 Paint 事件进行重绘
             };
             // 设置 PictureBox 背景为透明，防止盖住界面
@@ -90,7 +148,7 @@ namespace AutoHorseRace
             _DSLoginTimer.Interval = 30; // 刷新频率，越小越平滑
             _DSLoginTimer.Tick += (s, e) =>
             {
-                _ProcessingAngle = (_ProcessingAngle + 15) % 360; // 每次旋转15度
+                _dsLoginProcessingAngle = (_dsLoginProcessingAngle + 15) % 360; // 每次旋转15度
                 pictureBoxDSLoginProcessing.Invalidate();    // 强制触发 Paint 事件进行重绘
             };
             // 设置 PictureBox 背景为透明，防止盖住界面
@@ -108,14 +166,33 @@ namespace AutoHorseRace
             // 如果没有防重入机制，建议这里也可以考虑加一个类似于前面的 _isRefreshing 锁，防止定时器重叠触发
             if (_EAAccount.IsLogin && _EnableBettingInfoRefresh)
             {
-                // 直接异步调用，内部的 HTTP 请求会自动在后台线程执行
-                UpdateAccountBalanceInfo("EA");
+                // V20260918_CODE_REVIEW_FIXES(3)：UpdateAccountBalanceInfo 改为 async Task 后
+                // 这里必须 await，否则内部的异常/耗时就完全脱离了这个方法的生命周期管理。
+                await UpdateAccountBalanceInfo("EA");
             }
-            if (_DSAccount.IsLogin && _EnableBettingInfoRefresh && !string.Equals(_Config.DSServerAddress, _Config.EAServerAddress))
+
+            // V20260918_DS_MULTI_ACCOUNT_DISCONNECT：之前这里只查第一个读水账户（_DSAccount），
+            // 其余读水账户即使真的断链了也检测不到、更不会触发停止扫描。现在改成遍历
+            // _DSAccounts 里所有【当前已登录】的账户，逐个查询余额；任何一个账户查询失败/
+            // 异常都会独立触发它自己的断链判定（见 HandleAccountDisconnected(accountType, account)），
+            // 不会被其它账户的成功状态"掩盖"。
+            var dsAccountsToCheck = (_DSAccounts != null && _DSAccounts.Count > 0)
+                ? _DSAccounts.Where(a => a != null && a.IsLogin).ToList()
+                : (_DSAccount != null && _DSAccount.IsLogin ? new List<Account> { _DSAccount } : new List<Account>());
+
+            bool isFirstDS = true;
+            foreach (var dsAccount in dsAccountsToCheck)
             {
-                // 错开 5 秒请求，避免两个账号在同一瞬间并发打满网络或服务器
-                await Task.Delay(5000);
-                UpdateAccountBalanceInfo("DS");
+                // 扫描一旦被（前面某个账户触发的自动断链）停掉，后面排队的账户就没必要继续查了。
+                if (!_EnableBettingInfoRefresh) break;
+                // 🔧 按账户自己的服务器地址判断，不再用 _Config.DSServerAddress 整体比较
+                // （现在每个 DS 账户可能各自打不同的服务器）。
+                if (string.Equals(dsAccount.BrokerServer, _Config.EAServerAddress)) continue;
+                // 错开请求，避免多个账号在同一瞬间并发打满网络或服务器：
+                // 第一个读水账户沿用原来相对打水账户 5 秒的错峰，之后每个账户之间再错开 2 秒。
+                await Task.Delay(isFirstDS ? 5000 : 2000);
+                isFirstDS = false;
+                await UpdateAccountBalanceInfo("DS", dsAccount);
             }
         }
         private DateTime _lastRefreshTime = DateTime.MinValue; // 初始化为最小值，确保第一次立即执行
@@ -130,6 +207,50 @@ namespace AutoHorseRace
         /// 严格按提交顺序串行落库，避免多个写入源互相竞态。详见 TradeRecordWriter.cs。
         /// </summary>
         private TradeRecordWriter _tradeRecordWriter;
+
+        /// <summary>
+        /// 保护 _tradeRecordWriter 整体替换（Stop+重新创建）与并发 Enqueue 之间的竞态：
+        /// AutoToNextRace() 转场时会先 Stop() 排干旧队列、再 new 一个新的 TradeRecordWriter，
+        /// 如果这期间恰好有其它线程（ExecuteTrade / RefreshTradeListToDB）正在调用 Enqueue，
+        /// 旧队列的 Channel 已经 Complete()，会直接抛 ChannelClosedException，导致这笔落库请求
+        /// 静默丢失（不会重试，也不会有死信日志）。所有对 _tradeRecordWriter 的读/写（Enqueue、
+        /// Stop+重建）统一经过这把锁，把"排干旧队列+切换到新队列"做成一个不可被 Enqueue 打断的
+        /// 原子操作，Enqueue 侧顶多是短暂等锁，不会丢数据。
+        /// </summary>
+        private readonly object _tradeRecordWriterLock = new object();
+
+        /// <summary>
+        /// 统一创建 TradeRecordWriter 的工厂方法，构造参数与原来内联 new 时完全一致，
+        /// 提炼出来是为了在 AutoToNextRace() 转场时可以按同样的方式重新创建一个新实例。
+        /// </summary>
+        private TradeRecordWriter CreateTradeRecordWriter()
+        {
+            return new TradeRecordWriter(
+                workerCount: 4,
+                bizLog: _Log,
+                eaAccountProvider: () => _EAAccount,
+                resolveState: dictKey =>
+                {
+                    if (_Config?.TradeStateStore == null) return null;
+                    var parts = dictKey.Split(new[] { '_' }, 3);
+                    return parts.Length == 3 ? _Config.TradeStateStore.GetOrCreate(parts[0], parts[1], parts[2]) : null;
+                },
+                logInfo: msg => _Log?.LogInfo(msg),
+                logError: msg => _logger.Error(msg));
+        }
+
+        /// <summary>
+        /// 所有落库 Enqueue 的统一入口：加锁只是为了跟 AutoToNextRace() 里
+        /// "Stop 旧队列 + 创建新队列" 那一小段互斥，锁内只做一次 Enqueue（纯内存操作，
+        /// 几乎不耗时），不会造成明显阻塞；转场时最多让 Enqueue 侧等待到新队列创建完毕。
+        /// </summary>
+        private void EnqueueTradeWrite(TradeWriteJob job)
+        {
+            lock (_tradeRecordWriterLock)
+            {
+                _tradeRecordWriter?.Enqueue(job);
+            }
+        }
 
         /// <summary>
         /// 定时查询并刷新盘口/投注信息的异步方法（已加入防重入与并发安全保护）
@@ -251,10 +372,20 @@ namespace AutoHorseRace
                 _Log.LogInfo($"[性能监控][QueryMyTradeInfListDataAsync][queryMyTrade] 后端服务耗时: {serverProcessTime}");
                 if (BetBatInfos != null)
                 {
-                    _logger.Debug($"[queryMyTrade Result]:{JsonConvert.SerializeObject(BetBatInfos, Formatting.Indented)}");
+                    // V20260918_CODE_REVIEW_FIXES(5)：这三处调试日志原来无条件对可能较大的对象做
+                    // Formatting.Indented 序列化，字符串插值会在到达 _logger.Debug 之前就先把整个
+                    // JSON 拼好，即使 Debug 级别被关闭也白白执行了这个开销，而且这个方法每一轮轮询
+                    // （最短 1~15 秒一次）都会走到。加上 IsDebugEnabled 判断，Debug 关闭时直接跳过序列化。
+                    if (_logger.IsDebugEnabled)
+                    {
+                        _logger.Debug($"[queryMyTrade Result]:{JsonConvert.SerializeObject(BetBatInfos, Formatting.Indented)}");
+                    }
                     var (allMyTrades, eatBetInfosList, eatBetInfoDict) = Utils.Utils.GetBatBetInfo(BetBatInfos);
-                    _logger.Debug($"[QueryMyTradeInfListDataAsync allMyTrades Result]:{JsonConvert.SerializeObject(allMyTrades, Formatting.Indented)}");
-                    _logger.Debug($"[QueryMyTradeInfListDataAsync eatBetInfoDict Result]:{JsonConvert.SerializeObject(eatBetInfoDict, Formatting.Indented)}");
+                    if (_logger.IsDebugEnabled)
+                    {
+                        _logger.Debug($"[QueryMyTradeInfListDataAsync allMyTrades Result]:{JsonConvert.SerializeObject(allMyTrades, Formatting.Indented)}");
+                        _logger.Debug($"[QueryMyTradeInfListDataAsync eatBetInfoDict Result]:{JsonConvert.SerializeObject(eatBetInfoDict, Formatting.Indented)}");
+                    }
                     // 🔥 唯一权威写入点：queryMyTrade 是"我方仓位"的唯一真相来源
                     foreach (var kvp in eatBetInfoDict)
                     {
@@ -297,6 +428,12 @@ namespace AutoHorseRace
         // 正常/强平 EAT 均通过 TryReserveEatIntent + HardRemaining 原子限额。
         private const double AmountEpsilon = 0.001;
 
+        // V20260918_CODE_REVIEW_FIXES(7)：Parallel.ForEach 处理各 combo 时的最大并发度上限。
+        // 原来不限并发，combo 数量一旦变多，会同时开出大量线程池线程去跑阻塞式 HTTP 请求
+        // （ExecuteTrade -> HTTPHelper.submitOrder/singleAutoTrade），挤压其它定时器任务的调度。
+        // 这里给一个保守的上限；如需调优可以后续挪到 Config 里做成可配置项。
+        private const int MaxComboParallelism = 8;
+
         /// <summary>
         /// 强平轮询入口：由 _timerRefreshBetInfoForClosePosition 每隔约 5 秒调用一次，
         /// 不在方法内部循环等待成交，而是依赖定时器的下一次触发形成"轮询"效果。
@@ -328,80 +465,24 @@ namespace AutoHorseRace
             DateTime now = DateTime.Now;
 
             // -------------------------------------------------------------------------
-            // 1. 解析当前比赛时间
+            // V20260918_CODE_REVIEW_FIXES(2)：
+            // 原来这里独立重写了一遍"解析比赛时间 -> 构造完整 DateTime -> 跨天修正 ->
+            // 计算强平窗口"的整套逻辑，跟下面 ClosePositionsByDeadlineAsync 里调用的
+            // TryGetTradeTimeContextForClose 是同一件事的两份实现，容易改一处忘了改
+            // 另一处导致两条通道判断的窗口不一致。这里直接复用同一个方法作为唯一权威来源。
             // -------------------------------------------------------------------------
-            if (!TimeSpan.TryParse(
-                    _Config.CurrentRaceTime,
-                    out TimeSpan raceTime))
+            if (!TryGetTradeTimeContextForClose(now, out DateTime raceDateTime, out DateTime normalBetEndTime, out DateTime closeStartTime, out DateTime closeEndTime))
             {
                 _logger.Error(
-                    $"[强制平仓] 解析当前比赛时间失败，" +
-                    $"CurrentRaceTime 格式无效: '{_Config.CurrentRaceTime}'");
-
+                    $"[强制平仓] 解析/构造比赛时间失败，CurrentRaceTime='{_Config.CurrentRaceTime}'");
                 return;
             }
-
-            // -------------------------------------------------------------------------
-            // 2. 构造完整的比赛 DateTime
-            // -------------------------------------------------------------------------
-            string todayStr = now.ToString("yyyy-MM-dd");
-
-            string fullRaceTimeStr =
-                $"{todayStr} {_Config.CurrentRaceTime}:00";
-
-            if (!DateTime.TryParseExact(
-                    fullRaceTimeStr,
-                    "yyyy-MM-dd HH:mm:ss",
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    System.Globalization.DateTimeStyles.None,
-                    out DateTime raceDateTime))
-            {
-                _logger.Error(
-                    $"[强制平仓] 构造比赛完整时间失败，" +
-                    $"FullRaceTime='{fullRaceTimeStr}', " +
-                    $"CurrentRaceTime='{_Config.CurrentRaceTime}'");
-
-                return;
-            }
-
-            // -------------------------------------------------------------------------
-            // 3. 跨天处理
-            //
-            // 如果当前已经是晚上 20:00 以后，而比赛时间是凌晨
-            // 00:00 ~ 05:59，则比赛属于“下一天”。
-            //
-            // 例如：
-            // Now       = 2026-09-12 23:58:09
-            // RaceTime  = 00:00:00
-            //
-            // 初始解析：
-            // 2026-09-12 00:00:00
-            //
-            // 修正后：
-            // 2026-09-13 00:00:00
-            // -------------------------------------------------------------------------
-            if (now.Hour >= 20 && raceDateTime.Hour < 6)
-            {
-                raceDateTime = raceDateTime.AddDays(1);
-            }
-
-            // -------------------------------------------------------------------------
-            // 4. 计算正常下注截止时间与强平启动/结束时间
-            // 正常下注截止 = 开赛前 AutoTradeEndTimeDuration 秒
-            // 强平启动 = 正常下注截止后 10 秒
-            // 强平窗口 = [closeStartTime, closeEndTime)，closeEndTime = 开赛后 30 秒
-            // V20260913_CLOSE_WINDOW_EXTEND：强平窗口原本在开赛时刻（raceDateTime）就截止，
-            // 现在按需求延长到开赛后 30 秒，给强平多留一轮轮询的时间窗口。
-            // -------------------------------------------------------------------------
-            DateTime normalBetEndTime = raceDateTime.AddSeconds(-_Config.AutoTradeEndTimeDuration);
-            DateTime closeStartTime = normalBetEndTime.AddSeconds(10);
-            DateTime closeEndTime = raceDateTime.AddSeconds(30);
 
             // -------------------------------------------------------------------------
             // 5. 输出时间诊断日志
             //
             // 这个日志非常重要。
-            // 如果以后再次出现“强平没有执行”的问题，可以直接从日志判断
+            // 如果以后再次出现"强平没有执行"的问题，可以直接从日志判断
             // 当前时间、比赛时间以及强平窗口是否正确。
             // -------------------------------------------------------------------------
             _Log.LogInfo(
@@ -602,6 +683,7 @@ namespace AutoHorseRace
             // deleteAll/deleteOpenBetRecord 只删除了服务端/本地数据库记录，
             // TradeStateStore 里缓存的 BetExecuted/EffectiveEatCommitted 仍是删除前的旧值，
             // 若不重新拉取，下面基于 allStates 判断"哪些组合需要重新挂吃注单"就会用到过期数据。
+            _Log.LogInfo($"[强平]强平前拉取最新交易数据");
             await QueryAndApplyMyTradeSnapshotAsync();
             if (DateTime.Now >= closeEndTime)
             {
@@ -760,16 +842,28 @@ namespace AutoHorseRace
             _Config.TradeStateStore?.Stop();
             // 🔧 停止接收新的落库 job，并给已入队但还没写完的 job 最多 5 秒排干时间，
             // 尽量避免进程退出时丢失最后几笔还没来得及落库的交易结果。
-            _tradeRecordWriter?.Stop(TimeSpan.FromSeconds(5));
+            // 加锁避免和其它线程正在进行的 Enqueue 竞态（详见 _tradeRecordWriterLock 声明处注释）。
+            lock (_tradeRecordWriterLock)
+            {
+                _tradeRecordWriter?.Stop(TimeSpan.FromSeconds(5));
+            }
             if (string.Equals(buttonAccountLogin.Text, "已登陆"))
             {
                 HTTPHelper.logout(_Config.EAServerAddress, _EAAccount.UserCode);
             }
+            // 🆕 遍历所有 DS 账户逐个登出；每个账户可能配了不同的服务器地址（account.BrokerServer，
+            // 来自 Config.json 中逗号分隔的 DSServerAddress 列表），不再统一用 _Config.DSServerAddress 比较/登出。
             if (string.Equals(buttonDSLogin.Text, "已登陆"))
             {
-                if (!string.Equals(_Config.DSServerAddress, _Config.EAServerAddress))
+                var accountsToLogout = (_DSAccounts != null && _DSAccounts.Count > 0)
+                    ? _DSAccounts
+                    : (_DSAccount != null ? new List<Account> { _DSAccount } : new List<Account>());
+                foreach (var account in accountsToLogout.Where(a => a != null && a.IsLogin))
                 {
-                    HTTPHelper.logout(_Config.DSServerAddress, _DSAccount.UserCode);
+                    if (!string.Equals(account.BrokerServer, _Config.EAServerAddress))
+                    {
+                        HTTPHelper.logout(account.BrokerServer, account.UserCode);
+                    }
                 }
             }
         }
@@ -810,9 +904,22 @@ namespace AutoHorseRace
         /// </summary>
         public Account _EAAccount;
         /// <summary>
-        /// 读水账户
+        /// 读水账户（兼容旧代码：始终指向 _DSAccounts 的第一个元素）
         /// </summary>
         public Account _DSAccount;
+        /// <summary>
+        /// 🆕 多路读水账户列表：由 textBoxDSAccountCode/Password/Pin 三个文本框 与
+        /// _Config.DSServerAddress（后台 Config.json 中维护，逗号分隔，不经界面输入）用英文逗号分隔，
+        /// 按下标一一对应解析而来（第 i 个账号配第 i 个密码/安码/服务器地址）。
+        /// 每个账户可以打不同的服务器，因为服务端不支持同一地址登陆多个账户。
+        /// 用于 RefreshBetInfoDataList 的 race 查询（谁先返回非空数据就用谁）。
+        /// </summary>
+        public List<Account> _DSAccounts = new List<Account>();
+        /// <summary>
+        /// 🆕 分析串行化专用锁：无论查询侧是几个 DS 账户，AutoBetting（含内部
+        /// RefreshMyTradeSnapshot）任意时刻只允许一个实例在跑。
+        /// </summary>
+        private readonly object _autoBettingLock = new object();
         /// <summary>
         /// 自动交易是否启动，自动交易和是否自动选中组合使用
         /// </summary>
@@ -978,18 +1085,7 @@ namespace AutoHorseRace
             // 注意：这里用到的 _Config/_EAAccount 此时还没有被 LoadConfigFile()/EAForm_Load 赋值，
             // 但 eaAccountProvider/resolveState 全部是 lambda，只有真正处理 job 时才会读取，
             // 构造阶段（这里）不会触碰这两个字段，所以在 LoadConfigFile 之前构造是安全的。
-            _tradeRecordWriter = new TradeRecordWriter(
-                workerCount: 4,
-                bizLog: _Log,
-                eaAccountProvider: () => _EAAccount,
-                resolveState: dictKey =>
-                {
-                    if (_Config?.TradeStateStore == null) return null;
-                    var parts = dictKey.Split(new[] { '_' }, 3);
-                    return parts.Length == 3 ? _Config.TradeStateStore.GetOrCreate(parts[0], parts[1], parts[2]) : null;
-                },
-                logInfo: msg => _Log?.LogInfo(msg),
-                logError: msg => _logger.Error(msg));
+            _tradeRecordWriter = CreateTradeRecordWriter();
         }
         /// <summary>
         /// 初始化UI参数
@@ -1002,10 +1098,11 @@ namespace AutoHorseRace
             textBoxAccountCode.Text = _EAAccount.UserCode;
             textBoxAccountPassword.Text = _EAAccount.Password;
             textBoxAccountPin.Text = _EAAccount.Pin;
-            //读水账号密码
-            textBoxDSAccountCode.Text = _DSAccount.UserCode;
-            textBoxDSAccountPassword.Text = _DSAccount.Password;
-            textBoxDSAccountPin.Text = _DSAccount.Pin;
+            //读水账号密码（🆕 多账户以英文逗号分隔的原始文本，直接回显到文本框；
+            // 服务器地址不经界面输入，只在 Config.json 的 _Config.DSServerAddress 里维护）
+            textBoxDSAccountCode.Text = _MyConfig.DSAccount.UserCode;
+            textBoxDSAccountPassword.Text = _MyConfig.DSAccount.Password;
+            textBoxDSAccountPin.Text = _MyConfig.DSAccount.Pin;
             //自动交易参数
             numericUpDownAutoTradeStartTimeDuration.Value = _Config.AutoTradeStartTimeDuration;
             numericUpDownAutoTradeEndTimeDuration.Value = _Config.AutoTradeEndTimeDuration;
@@ -1054,6 +1151,74 @@ namespace AutoHorseRace
             //停止按钮颜色改变事件
         }
         /// <summary>
+        /// 🆕 把逗号分隔的文本拆分并去除首尾空白，空字符串直接返回空列表。
+        /// </summary>
+        private static List<string> SplitTrim(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return new List<string>();
+            return text.Split(',').Select(s => s.Trim()).ToList();
+        }
+
+        /// <summary>
+        /// 🆕 把 textBoxDSAccountCode/Password/Pin 三个文本框 + serverAddressText（即
+        /// _Config.DSServerAddress，只在 Config.json 里维护，不经界面输入）的逗号分隔内容，
+        /// 按下标一一对应解析成多个 Account，每个账户各自的 BrokerServer 来自
+        /// serverAddressText 里对应下标的地址，不再共用同一个服务器地址。
+        /// 服务端不支持同一地址登陆多个账户，若解析出重复地址会记录警告（仍会继续解析，
+        /// 但这些账户实际登陆时大概率会互相顶掉，由登陆结果的成功/失败明细自然暴露）。
+        /// 若能在当前 _DSAccounts 里找到 UserCode 完全相同的既有对象，复用它而不是新建，
+        /// 这样能保留该账户已有的 IsLogin 状态，避免每次重新解析都把在线状态清零。
+        /// </summary>
+        private List<Account> BuildDSAccountsFromInput(string codeText, string passwordText, string pinText, string serverAddressText)
+        {
+            var codes = SplitTrim(codeText);
+            var passwords = SplitTrim(passwordText);
+            var pins = SplitTrim(pinText);
+            var servers = SplitTrim(serverAddressText);
+
+            if (codes.Count != passwords.Count || codes.Count != pins.Count || codes.Count != servers.Count)
+            {
+                _Log?.LogInfo($"[读水账户解析] 账号[{codes.Count}个]、密码[{passwords.Count}个]、安码[{pins.Count}个]、" +
+                             $"服务器地址[{servers.Count}个]数量不一致，缺失位置将以空字符串填充，" +
+                             $"对应账户登陆必然失败，请检查 Config.json 中 DSServerAddress 是否与账号数量一致（逗号分隔）。");
+            }
+
+            int n = Math.Max(codes.Count, Math.Max(passwords.Count, Math.Max(pins.Count, servers.Count)));
+            var result = new List<Account>();
+            for (int i = 0; i < n; i++)
+            {
+                string code = i < codes.Count ? codes[i] : "";
+                if (string.IsNullOrWhiteSpace(code)) continue; // 跳过空账号位（多余逗号等）
+
+                string pwd = i < passwords.Count ? passwords[i] : "";
+                string pin = i < pins.Count ? pins[i] : "";
+                string server = i < servers.Count ? servers[i] : "";
+
+                var existing = _DSAccounts?.FirstOrDefault(a => a != null && string.Equals(a.UserCode, code, StringComparison.Ordinal));
+                var account = existing ?? new Account();
+                account.UserCode = code;
+                account.Password = pwd;
+                account.Pin = pin;
+                account.BrokerName = "长城";
+                account.BrokerCode = "CC";
+                account.BrokerServer = server;
+                result.Add(account);
+            }
+
+            // 🆕 服务端不支持同一地址登陆多个账户，提前检测重复地址并警告。
+            var dupServerGroups = result.Where(a => !string.IsNullOrWhiteSpace(a.BrokerServer))
+                .GroupBy(a => a.BrokerServer)
+                .Where(g => g.Count() > 1)
+                .ToList();
+            foreach (var g in dupServerGroups)
+            {
+                _Log?.LogInfo($"[读水账户解析] ⚠️ 服务器地址[{g.Key}]被多个账户共用: [{string.Join(", ", g.Select(a => a.UserCode))}]，" +
+                             $"服务端不支持同一地址多账户同时在线，这些账户登陆时大概率会互相顶掉，请在 Config.json 的 DSServerAddress 中为每个账户配置不同的服务器地址。");
+            }
+
+            return result;
+        }
+        /// <summary>
         /// 加载配置文件
         /// </summary>
         public void LoadConfigFile()
@@ -1078,10 +1243,6 @@ namespace AutoHorseRace
                     {
                         _MyConfig.DSAccount = new Account();
                     }
-                    _DSAccount = _MyConfig.DSAccount;
-                    _DSAccount.IsLogin = false; // 初始化时默认未登录
-                    _DSAccount.BrokerName = "长城";
-                    _DSAccount.BrokerCode = "CC";
                 }
             }
             else
@@ -1095,6 +1256,20 @@ namespace AutoHorseRace
             else
             {
                 _logger.Fatal("没有初始化配置文件，系统初始化异常");
+            }
+            // 🆕 从已保存的逗号分隔文本 + _Config.DSServerAddress（Config.json 中维护）
+            // 预解析出账户列表（此时全部未登录）。
+            if (_DSAccount != null && _Config != null)
+            {
+                _DSAccounts = BuildDSAccountsFromInput(_MyConfig.DSAccount.UserCode, _MyConfig.DSAccount.Password, _MyConfig.DSAccount.Pin, _Config.DSServerAddress);
+                if (_DSAccounts.Count == 0)
+                {
+                    // 没解析出任何账户时，退化为只含 _DSAccount 自身，避免 _DSAccounts 长期为空列表
+                    _DSAccount.BrokerServer = _Config.DSServerAddress;
+                    _DSAccounts = new List<Account> { _DSAccount };
+                }
+                // 保持 _DSAccount 指向解析结果的第一个账户，兼容其它仍引用单个 _DSAccount 的地方
+                _DSAccount = _DSAccounts[0];
             }
             _logger.Debug("加载初始化文件完成");
         }
@@ -1133,7 +1308,7 @@ namespace AutoHorseRace
             // 赛马日逻辑处理：
             // 如果当前时间是深夜/凌晨（例如 00:00 到 06:00 之间），
             // 并且系统正在跑的是前一天夜场的最后几场比赛（跨天赛事），
-            // 那么它的赛马日期（RaceDate）应该属于“昨天”，而不是今天。
+            // 那么它的赛马日期（RaceDate）应该属于"昨天"，而不是今天。
             DateTime targetRaceDate = now;
             if (now.Hour < 6)
             {
@@ -1243,25 +1418,43 @@ namespace AutoHorseRace
                     _EAAccount.Password = textBoxAccountPassword.Text;
                     _EAAccount.Pin = textBoxAccountPin.Text;
                 }
+                // V20260918_SAVECONFIG_DS_MULTI_ACCOUNT_FIX：这里原来会把 textBoxDSAccountCode/
+                // Password/Pin 的原始文本（多账户时是逗号分隔的整串，例如 "rh243,mfhk299"）直接
+                // 写进 _DSAccount.UserCode/Password/Pin。但 _DSAccount 登陆后其实和 _DSAccounts[0]
+                // 是同一个对象引用（代表一个真实的、单个账户），把整串逗号文本塞进它的 UserCode，
+                // 会把这个账户的 UserCode 从 "rh243" 污染成 "rh243,mfhk299"。紧接着下面
+                // BuildDSAccountsFromInput 按 UserCode 精确匹配来复用旧账户对象时，"rh243" 就再也
+                // 匹配不上被污染成 "rh243,mfhk299" 的旧对象，只能新建一个全新的、IsLogin=false 的
+                // Account 顶替它——账户明明已经登陆，却在下一次保存配置（比如切换赛场会触发
+                // SaveConfig）之后被"重置"成未登陆，QueryMarketRace 的"跳过未登录账户"、
+                // 余额轮询的自动断链判定等所有依赖 IsLogin 的逻辑都会误判它已经掉线。
+                // 修复：多账户的原始逗号文本只写进持久化专用的 _MyConfig.DSAccount（和
+                // buttonDSLogin_Click 里的做法保持一致），不再写进代表单个账户的 _DSAccount；
+                // BuildDSAccountsFromInput 完成后把 _DSAccount 重新指向 _DSAccounts[0]，避免它
+                // 变成一个已经不在 _DSAccounts 列表里的"孤儿对象"（否则后续"是否为主账户"之类
+                // 的 ReferenceEquals(targetAccount, _DSAccount) 判断也会跟着失真）。
+                if (_MyConfig.DSAccount == null)
+                {
+                    _MyConfig.DSAccount = new Account();
+                }
+                _MyConfig.DSAccount.UserCode = textBoxDSAccountCode.Text;
+                _MyConfig.DSAccount.Password = textBoxDSAccountPassword.Text;
+                _MyConfig.DSAccount.Pin = textBoxDSAccountPin.Text;
+
                 if (_DSAccount == null)
                 {
-                    _DSAccount = new Account
-                    {
-                        UserCode = textBoxDSAccountCode.Text,
-                        Password = textBoxDSAccountPassword.Text,
-                        Pin = textBoxDSAccountPin.Text
-                    };
-                    _MyConfig.DSAccount = _DSAccount;
+                    _DSAccount = new Account();
                 }
-                else
+                // 🆕 保存配置时同步重新解析多账户列表（服务器地址来自 _Config.DSServerAddress，
+                // 不经界面输入，需直接编辑 Config.json；按 UserCode 复用旧对象，不影响已登录状态）
+                _DSAccounts = BuildDSAccountsFromInput(textBoxDSAccountCode.Text, textBoxDSAccountPassword.Text, textBoxDSAccountPin.Text, _Config?.DSServerAddress);
+                if (_DSAccounts.Count == 0)
                 {
-                    _DSAccount.UserCode = textBoxDSAccountCode.Text;
-                    _DSAccount.Password = textBoxDSAccountPassword.Text;
-                    _DSAccount.Pin = textBoxDSAccountPin.Text;
+                    if (_Config != null) _DSAccount.BrokerServer = _Config.DSServerAddress;
+                    _DSAccounts = new List<Account> { _DSAccount };
                 }
-                if (_MyConfig != null)
-                {
-                }
+                // 保持 _DSAccount 指向解析结果的第一个账户，兼容其它仍引用单个 _DSAccount 的地方。
+                _DSAccount = _DSAccounts[0];
                 if (_Config != null)
                 {
                     //交易信息设置
@@ -1296,6 +1489,8 @@ namespace AutoHorseRace
                     _Config.CurrentRaceTime = textBoxCurrentRaceTime.Text;
                     //交易商平台设置
                     //保存该配置信息后需要调用InitEventConfig 把参数解析到变量中
+                    //注意：_Config.DSServerAddress（逗号分隔的多个服务器地址）不经界面输入，
+                    //仍按原有内容原样写回 Config.json，如需修改需直接编辑该配置文件。
                     File.WriteAllText(newConfigFile, JsonConvert.SerializeObject(_Config));
                     File.WriteAllText(newMyConfigFile, JsonConvert.SerializeObject(_MyConfig));
                 }
@@ -1335,33 +1530,47 @@ namespace AutoHorseRace
             }
             this.Text = $"LZY [{_EAAccount.UserCode}]";
         }
-        // 🔧 新增：EA/DS 各自独立的"已提示过断链"标记，避免账号断线期间
-        // 每次 _timerRefreshBalance 轮询都弹一次窗，把用户淹没在重复弹窗里。
+        // 🔧 EA/DS 各自独立的"已提示过断链"标记，避免账号断线期间每次 _timerRefreshBalance
+        // 轮询都弹一次窗，把用户淹没在重复弹窗里。
+        // V20260918_DS_MULTI_ACCOUNT_DISCONNECT：读水侧从单个 bool 改成按 UserCode 记录的
+        // 集合，因为现在要对 _DSAccounts 里的每个账户分别做"是否已经提示过断链"去重，
+        // 不能再用一个全局 bool 笼统代表"读水断链了"。
         private bool _eaDisconnectNotified = false;
-        private bool _dsDisconnectNotified = false;
+        private readonly HashSet<string> _dsDisconnectNotifiedUserCodes = new HashSet<string>(StringComparer.Ordinal);
         /// <summary>
-        /// 刷新账户余额信息
+        /// 刷新账户余额信息。
+        /// dsAccount：查询哪个读水账户时使用，仅在 accountType=="DS" 时生效；不传则兼容旧调用方式，
+        /// 退化为 _DSAccount（多账户列表里的第一个）。
         /// </summary>
-        /// <summary>
-        /// 刷新账户余额信息
-        /// </summary>
-        public async void UpdateAccountBalanceInfo(string accountType)
+        // V20260918_CODE_REVIEW_FIXES(3)：原来是 async void，调用方 QueryBalanceDataAsync 无法
+        // await 它、内部若抛出未处理异常也无法被上层 catch，只能靠 SynchronizationContext 兜底
+        // （在某些宿主下会直接让进程崩溃）。改为 async Task 并在调用处 await，同时给结果解析
+        // 部分加了 try/catch，避免响应结构异常（例如 result["data"] 为 null）时无人兜底。
+        // V20260918_DS_MULTI_ACCOUNT_DISCONNECT：新增 dsAccount 参数，支持对指定的某一个读水
+        // 账户查询余额/判定断链，而不再永远只查 _DSAccount。
+        public async Task UpdateAccountBalanceInfo(string accountType, Account dsAccount = null)
         {
             string serverAddress = "";
             string userCode = "";
             bool isLogin = false;
+            Account targetAccount = null;
             // 1. 读取配置与登录状态
             if (string.Equals(accountType, "EA"))
             {
+                targetAccount = _EAAccount;
                 isLogin = _EAAccount.IsLogin;
                 serverAddress = _Config.EAServerAddress;
                 userCode = _EAAccount.UserCode;
             }
             else if (string.Equals(accountType, "DS"))
             {
-                isLogin = _DSAccount.IsLogin;
-                serverAddress = _Config.DSServerAddress;
-                userCode = _DSAccount.UserCode;
+                // 未显式传入具体账户时，兼容旧调用方式，退化为第一个读水账户。
+                targetAccount = dsAccount ?? _DSAccount;
+                isLogin = targetAccount != null && targetAccount.IsLogin;
+                // 🔧 改用账户自己的地址，不再是共用的 _Config.DSServerAddress
+                // （现在每个 DS 账户可能各自打不同的服务器）。
+                serverAddress = targetAccount?.BrokerServer;
+                userCode = targetAccount?.UserCode;
             }
             if (!isLogin) return;
             // 2. 🌟 核心：使用 Stopwatch 测量 HTTPHelper.queryBalance 的客户端真实调用耗时
@@ -1374,8 +1583,8 @@ namespace AutoHorseRace
             catch (Exception ex)
             {
                 stopwatch.Stop();
-                _Log.LogInfo($"[性能监控][UpdateAccountBalanceInfo][queryBalance] 请求异常 耗时: {stopwatch.ElapsedMilliseconds}ms, 错误: {ex.Message}");
-                HandleAccountDisconnected(accountType);
+                _Log.LogInfo($"[性能监控][UpdateAccountBalanceInfo][queryBalance][{userCode}] 请求异常 耗时: {stopwatch.ElapsedMilliseconds}ms, 错误: {ex.Message}");
+                HandleAccountDisconnected(accountType, targetAccount);
                 return;
             }
             finally
@@ -1383,56 +1592,101 @@ namespace AutoHorseRace
                 stopwatch.Stop();
             }
             long clientElapsedMs = stopwatch.ElapsedMilliseconds;
-            _Log.LogInfo($"[性能监控][UpdateAccountBalanceInfo][queryBalance] 客户端总耗时: {clientElapsedMs}ms");
+            _Log.LogInfo($"[性能监控][UpdateAccountBalanceInfo][queryBalance][{userCode}] 客户端总耗时: {clientElapsedMs}ms");
             if (result == null || !(bool)result["success"])
             {
-                HandleAccountDisconnected(accountType);
+                HandleAccountDisconnected(accountType, targetAccount);
                 return;
             }
             // 🔧 本次查询成功，说明账号是通的，清掉"已提示过断链"的标记，
             // 避免下次真的断线时被旧标记永久屏蔽，导致再也不弹窗提醒
-            ResetAccountDisconnectedNotifyFlag(accountType);
+            ResetAccountDisconnectedNotifyFlag(accountType, targetAccount);
             // 同时打印后端自身返回的处理耗时（如果有的话）
-            _Log.LogInfo($"[性能监控][UpdateAccountBalanceInfo][queryBalance] 后端服务耗时: {result["serverProcessTime"]}");
-            string profitAndLoss = result["data"]["pl"].ToString();
-            string accountCredit = result["data"]["balance"].ToString();
-            string plCleanText = Regex.Replace(profitAndLoss, "<.*?>", string.Empty);
-            bool isRed = profitAndLoss.Contains("class=\"RD\"") || profitAndLoss.Contains("class='RD'");
-            // 3. 🌟 跨线程安全：直接在 UI 控件上使用 BeginInvoke 更新界面
-            if (_AccountDisplay.labelAccountCredit.InvokeRequired)
+            _Log.LogInfo($"[性能监控][UpdateAccountBalanceInfo][queryBalance][{userCode}] 后端服务耗时: {result["serverProcessTime"]}");
+            try
             {
-                _AccountDisplay.labelAccountCredit.BeginInvoke(new Action(() => UpdateUIControls(accountType, profitAndLoss, accountCredit, plCleanText, isRed)));
+                string profitAndLoss = result["data"]["pl"].ToString();
+                string accountCredit = result["data"]["balance"].ToString();
+                string plCleanText = Regex.Replace(profitAndLoss, "<.*?>", string.Empty);
+                bool isRed = profitAndLoss.Contains("class=\"RD\"") || profitAndLoss.Contains("class='RD'");
+
+                // 🆕 界面上目前只有一组"读水余额"展示控件，多账户场景下只让当前的
+                // 主账户（_DSAccount，即 _DSAccounts[0]）刷新这组共享 UI；其它读水账户
+                // 查到的余额只记录在它自己的 Account.ProfitAndLoss/AccountCredit 字段上，
+                // 不去抢共享控件，避免多个账户互相覆盖界面显示。
+                bool updateSharedUI = string.Equals(accountType, "EA") ||
+                    (string.Equals(accountType, "DS") && ReferenceEquals(targetAccount, _DSAccount));
+
+                if (updateSharedUI)
+                {
+                    // 3. 🌟 跨线程安全：直接在 UI 控件上使用 BeginInvoke 更新界面
+                    if (_AccountDisplay.labelAccountCredit.InvokeRequired)
+                    {
+                        _AccountDisplay.labelAccountCredit.BeginInvoke(new Action(() => UpdateUIControls(accountType, profitAndLoss, accountCredit, plCleanText, isRed)));
+                    }
+                    else
+                    {
+                        UpdateUIControls(accountType, profitAndLoss, accountCredit, plCleanText, isRed);
+                    }
+                }
+                else if (string.Equals(accountType, "DS") && targetAccount != null)
+                {
+                    targetAccount.ProfitAndLoss = profitAndLoss;
+                    targetAccount.AccountCredit = accountCredit;
+                }
             }
-            else
+            catch (Exception ex)
             {
-                UpdateUIControls(accountType, profitAndLoss, accountCredit, plCleanText, isRed);
+                // 服务器返回 success=true 但 data 结构不符合预期时，不能任由异常从 async 方法里
+                // 逃逸（原来 async void 场景下会直接变成未处理异常），记录日志即可，等待下一轮重试。
+                _logger.Error(ex, $"[UpdateAccountBalanceInfo][{accountType}][{userCode}] 解析余额响应异常，响应内容: {result?.ToString()}");
             }
         }
         /// <summary>
         /// 余额查询失败（服务器返回失败，或请求本身抛异常）时统一处理：
         /// 提示用户账号已断链需要重新登陆。同一账号在恢复登陆之前只弹一次。
+        /// account：具体是哪个账户断了（EA 传 _EAAccount 或省略；DS 必须传具体的那个读水账户，
+        /// 省略则退化为 _DSAccount，仅用于兼容旧调用）。
         /// </summary>
-        private void HandleAccountDisconnected(string accountType)
+        private void HandleAccountDisconnected(string accountType, Account account = null)
         {
-            bool alreadyNotified = string.Equals(accountType, "EA") ? _eaDisconnectNotified : _dsDisconnectNotified;
-            if (alreadyNotified) return;
-
-            if (string.Equals(accountType, "EA")) _eaDisconnectNotified = true;
-            else if (string.Equals(accountType, "DS")) _dsDisconnectNotified = true;
-
-            string accountName = string.Equals(accountType, "EA") ? "打水" : "读水";
-            _Log.LogInfo($"[{accountName}账号]余额查询失败，判定为账号已断链");
-
-            if (this.InvokeRequired)
+            if (string.Equals(accountType, "EA"))
             {
-                this.Invoke(new Action(() => ShowAccountDisconnectedPrompt(accountType, accountName)));
+                if (_eaDisconnectNotified) return;
+                _eaDisconnectNotified = true;
+
+                string accountName = "打水";
+                _Log.LogInfo($"[{accountName}账号]余额查询失败，判定为账号已断链");
+
+                if (this.InvokeRequired)
+                    this.Invoke(new Action(() => ShowAccountDisconnectedPrompt(accountType, accountName, _EAAccount)));
+                else
+                    ShowAccountDisconnectedPrompt(accountType, accountName, _EAAccount);
             }
-            else
+            else if (string.Equals(accountType, "DS"))
             {
-                ShowAccountDisconnectedPrompt(accountType, accountName);
+                var dsAccount = account ?? _DSAccount;
+                if (dsAccount == null) return;
+                string key = dsAccount.UserCode ?? "";
+
+                // V20260918_DS_MULTI_ACCOUNT_DISCONNECT：按 UserCode 去重，_DSAccounts 里
+                // 每个读水账户各自独立判定、独立提示、独立触发停止扫描，互不遮盖。
+                lock (_dsDisconnectNotifiedUserCodes)
+                {
+                    if (_dsDisconnectNotifiedUserCodes.Contains(key)) return;
+                    _dsDisconnectNotifiedUserCodes.Add(key);
+                }
+
+                string accountName = $"读水[{dsAccount.UserCode}]";
+                _Log.LogInfo($"[{accountName}账号]余额查询失败，判定为账号已断链");
+
+                if (this.InvokeRequired)
+                    this.Invoke(new Action(() => ShowAccountDisconnectedPrompt(accountType, accountName, dsAccount)));
+                else
+                    ShowAccountDisconnectedPrompt(accountType, accountName, dsAccount);
             }
         }
-        private void ShowAccountDisconnectedPrompt(string accountType, string accountName)
+        private void ShowAccountDisconnectedPrompt(string accountType, string accountName, Account account)
         {
             // MessageBox.Show 是模态阻塞调用，这一行会一直卡到用户点"确定"才往下走，
             // 所以下面的置位逻辑天然就是"点确定之后才执行"，不需要额外处理。
@@ -1445,14 +1699,60 @@ namespace AutoHorseRace
             }
             else if (string.Equals(accountType, "DS"))
             {
-                _DSAccount.IsLogin = false;
-                UpdateDSConnectStatus(buttonDSLogin, 0);
+                if (account != null) account.IsLogin = false;
+                // 🆕 登陆按钮目前只反映"是否有读水账户在线"这一个整体状态（见 anyDSLogin），
+                // 只有当断链的正是当前主账户 _DSAccount 时才把按钮打回"未登陆"；其它非主账户
+                // 断链不动按钮显示，避免明明还有别的读水账户在线、按钮却被误置为未登陆。
+                bool isPrimary = _DSAccount == null || (account != null && string.Equals(account.UserCode, _DSAccount.UserCode, StringComparison.Ordinal));
+                if (isPrimary)
+                {
+                    UpdateDSConnectStatus(buttonDSLogin, 0);
+                }
+            }
+
+            // V20260918_STOP_SCAN_ON_DISCONNECT：打水(EA)或【任意一个】读水(DS)账号在这里
+            // 被判定为自动断链后，如果自动扫描当时还是"已启动"状态，之前不会跟着停——扫描
+            // 定时器（_timerRefreshBetInfo）还在跑，只是每一轮 QueryEATBETInfoDataAsync 一进来
+            // 就因为 _EAAccount.IsLogin==false 直接 return，相当于空转；扫描按钮却仍显示
+            // "扫描已启动"，容易让人误以为系统还在正常工作，没有第一时间去重新登陆。这里
+            // 统一在断链后，若扫描仍处于开启状态，就显式调用 UpdateQueryEATBETInfoStatus 停掉
+            // 扫描，按钮文字/颜色、_EnableBettingInfoRefresh 标记、定时器都会同步变为"已停止"，
+            // 和手动登出时的处理保持一致（buttonAccountLogin_Click / buttonDSLogin_Click 里
+            // 登出成功后同样会调用 UpdateQueryEATBETInfoStatus("扫描已停止")）。
+            // 🆕 V20260918_DS_MULTI_ACCOUNT_DISCONNECT：现在读水侧的自动断链检测已经覆盖
+            // _DSAccounts 里的每一个已登录账户（见 QueryBalanceDataAsync），不再只判第一个；
+            // 任意一个打水/读水账户断链，都会走到这里停止扫描。
+            if (_EnableBettingInfoRefresh)
+            {
+                _Log.LogInfo($"[{accountName}账号]检测到自动断链，自动扫描已随之停止，请重新登陆后手动点击「扫描」按钮重新启动。");
+                UpdateQueryEATBETInfoStatus("扫描已停止");
             }
         }
-        private void ResetAccountDisconnectedNotifyFlag(string accountType)
+        /// <summary>
+        /// 清掉"已提示过断链"的标记。account 为 null 时（仅 DS 侧有意义）代表整批清空——
+        /// 用于读水账户批量重新登陆后，一次性清掉所有旧账户残留的断链标记；传入具体账户
+        /// 则只清掉这一个账户自己的标记。
+        /// </summary>
+        private void ResetAccountDisconnectedNotifyFlag(string accountType, Account account = null)
         {
-            if (string.Equals(accountType, "EA")) _eaDisconnectNotified = false;
-            else if (string.Equals(accountType, "DS")) _dsDisconnectNotified = false;
+            if (string.Equals(accountType, "EA"))
+            {
+                _eaDisconnectNotified = false;
+            }
+            else if (string.Equals(accountType, "DS"))
+            {
+                lock (_dsDisconnectNotifiedUserCodes)
+                {
+                    if (account != null)
+                    {
+                        _dsDisconnectNotifiedUserCodes.Remove(account.UserCode ?? "");
+                    }
+                    else
+                    {
+                        _dsDisconnectNotifiedUserCodes.Clear();
+                    }
+                }
+            }
         }
         /// <summary>
         /// 💡 辅助私有方法：专门负责在 UI 线程安全更新控件文本和颜色
@@ -1469,8 +1769,11 @@ namespace AutoHorseRace
             }
             else if (string.Equals(accountType, "DS"))
             {
-                _DSAccount.ProfitAndLoss = profitAndLoss;
-                _DSAccount.AccountCredit = accountCredit;
+                if (_DSAccount != null)
+                {
+                    _DSAccount.ProfitAndLoss = profitAndLoss;
+                    _DSAccount.AccountCredit = accountCredit;
+                }
                 // 注意：核对一下你原代码这里 DS 控件的赋值逻辑是否写反了（原代码 DS 用了 labelAccountCredit/DSCredit 交叉赋值，这里保留你的原意或按需调整）
                 _AccountDisplay.labelDSProfitAndLoss.Text = accountCredit;
                 _AccountDisplay.labelDSCredit.Text = plCleanText;
@@ -1779,7 +2082,10 @@ namespace AutoHorseRace
                         return;
                     }
                     double finalStake = reservedStake;
-                    _logger.Warn(
+                    // V20260918_CODE_REVIEW_FIXES(6)：这是每次正常发出吃票请求都会打的日志，是
+                    // 预期内的常规业务事件，不是异常，之前用 Warn 级别会跟真正的告警（如
+                    // [EAT-BLOCK]）混在一起，降级为 Info。
+                    _logger.Info(
                         $"[EAT-SEND] [{dictKey}] " +
                         $"BET_EXEC={state.BetExecuted:F3} | " +
                         $"EFFECTIVE_EAT_BEFORE={state.EffectiveEatCommitted - finalStake:F3} | " +
@@ -1899,7 +2205,7 @@ namespace AutoHorseRace
             // 💡 建议补充：如果以上都不满足，但存在任意 Pending，可以归为通用排队/处理中状态（或保持返回 0 视你业务而定）
             if (currentEatPending > 0 || currentBetPending > 0)
             {
-                // 如果有需要，可以返回一个特定的中间状态码，例如 5 代表“部分挂单中”
+                // 如果有需要，可以返回一个特定的中间状态码，例如 5 代表"部分挂单中"
             }
             return currentBettingPendingStatus; // 默认返回 0（代表其他或未知中间状态）
         }
@@ -1957,7 +2263,9 @@ namespace AutoHorseRace
             double configMinLimit = isQStake ? _Config.QMinLimit : _Config.QPMinLimit;
             double configStakeAmount = isQStake ? _Config.QStakeAmount : _Config.QPStakeAmount;
             // 使用 Parallel.ForEach 按照 combo 分组进行多线程并发处理
-            Parallel.ForEach(bettingInfoDict, kvp =>
+            // V20260918_CODE_REVIEW_FIXES(7)：加上 MaxDegreeOfParallelism 上限，避免 combo 数量
+            // 变多后一次性打满线程池去跑阻塞式 HTTP 请求。
+            Parallel.ForEach(bettingInfoDict, new ParallelOptions { MaxDegreeOfParallelism = MaxComboParallelism }, kvp =>
             {
                 var itemDict = kvp.Value;
                 string comboKey = kvp.Key;
@@ -2101,17 +2409,21 @@ namespace AutoHorseRace
         /// <summary>
         /// 执行下注
         /// </summary>
-        /// <param name="EatBetInfo"></param>
-        /// <param name="BetInfo"></param>
+        /// <param name="eatBetInfo">用于落库的吃票/下注挂起记录快照，可为 null（手工单不落库时）</param>
+        /// <param name="betInfo">本次提交对应的盘口/委托信息</param>
         /// <param name="orderType">M:市价单,P:挂单</param>
         /// <param name="autoFlag"></param>
         /// <returns></returns>
         ///
-        public JObject ExecuteTrade(dynamic EatBetInfo, dynamic BetInfo, string orderType, string autoFlag)
+        // V20260918_CODE_REVIEW_FIXES(4)：原来这里用 dynamic 接收 EatBetInfo/BetInfo：所有调用方
+        // 实际上传入的都是具体的 EatBetInfo/BetInfo 类型（AutoBetProcess/AutoEatProcess/
+        // ClosePositionByDeadline/buttonTestBet_Click 均是如此），dynamic 除了在每次属性访问时
+        // 多一层 DLR 调度开销、丢失编译期类型检查之外没有带来任何好处，这里改回强类型参数。
+        public JObject ExecuteTrade(EatBetInfo eatBetInfo, BetInfo betInfo, string orderType, string autoFlag)
         {
-            string trade_type = string.Equals(BetInfo.action, "EAT") ? "BET" : "EAT";
+            string trade_type = string.Equals(betInfo.action, "EAT") ? "BET" : "EAT";
 
-            // 🔧 关键修复：优先使用调用方已经算好（可能经过"剩余缺口裁剪"）的 BetInfo.stakeAmount，
+            // 🔧 关键修复：优先使用调用方已经算好（可能经过"剩余缺口裁剪"）的 betInfo.stakeAmount，
             // 只有它无效（<=0 或转换失败）时才回退到配置里的固定默认值。
             // 之前这里无条件用 _Config.QStakeAmount/QPStakeAmount 覆盖，
             // 会导致 ClosePositionByDeadline 里精心计算的
@@ -2119,28 +2431,28 @@ namespace AutoHorseRace
             // 完全失效——当前场景因为配置金额恰好等于10、且缺口从未小于10才没有暴露问题，
             // 一旦出现"剩余缺口小于配置金额"（比如部分成交后只差5块）就会按10发送造成超发。
             int betInfoStake = 0;
-            try { betInfoStake = (int)BetInfo.stakeAmount; } catch { /* dynamic 转换失败时忽略，走默认值 */ }
+            try { betInfoStake = (int)betInfo.stakeAmount; } catch { /* 转换失败时忽略，走默认值 */ }
             string stakeAmount = betInfoStake > 0
                 ? betInfoStake.ToString()
-                : (string.Equals(BetInfo.type, "Q") ? _Config.QStakeAmount.ToString() : _Config.QPStakeAmount.ToString());
+                : (string.Equals(betInfo.type, "Q") ? _Config.QStakeAmount.ToString() : _Config.QPStakeAmount.ToString());
 
             string serverProcessTime = "0ms";
             IDictionary<string, string> BettingMarketData = new Dictionary<string, string>
             {
-                { "col_name", BetInfo.type + "_" + BetInfo.action },
-                { "combo", BetInfo.combo },
-                { "q_type", BetInfo.type},
-                { "type", BetInfo.type },
-                { "toto", BetInfo.toto.ToString() },
-                { "limit", BetInfo.limit.ToString() },
-                { "odds", BetInfo.odds.ToString() },
-                { "race", BetInfo.raceNo },
+                { "col_name", betInfo.type + "_" + betInfo.action },
+                { "combo", betInfo.combo },
+                { "q_type", betInfo.type},
+                { "type", betInfo.type },
+                { "toto", betInfo.toto.ToString() },
+                { "limit", betInfo.limit.ToString() },
+                { "odds", betInfo.odds.ToString() },
+                { "race", betInfo.raceNo },
                 { "stake_amount", stakeAmount },
                 { "order_type", orderType },
                 { "trade_type", trade_type },
                 { "action", trade_type },
             };
-            _Log.LogInfo($"[{orderType}][{autoFlag}][{BetInfo.type}][{BetInfo.combo}][{trade_type}][{BetInfo.odds}][{BetInfo.limit}]下注开始");
+            _Log.LogInfo($"[{orderType}][{autoFlag}][{betInfo.type}][{betInfo.combo}][{trade_type}][{betInfo.odds}][{betInfo.limit}]下注开始");
             JObject resultJObject = null;
             if (string.Equals(orderType, "P"))
             {
@@ -2156,7 +2468,7 @@ namespace AutoHorseRace
             {
                 if (!string.Equals(autoFlag, "N"))
                 {
-                    BetInfo.action = trade_type;
+                    betInfo.action = trade_type;
                     bool accepted = IsOrderAccepted(resultJObject);
 
                     // 🔧 不再自己开 Task.Run 落库：改为丢进统一的 TradeRecordWriter 队列。
@@ -2164,13 +2476,13 @@ namespace AutoHorseRace
                     // worker 按 dictKey 分片、严格按提交顺序串行处理，既不占用 betLock/eatLock
                     // 的持有时间，又和 RefreshTradeListToDB 的周期性落库共用同一条写入通道，
                     // 彻底避免两条通道互相竞态（详见 TradeRecordWriter.cs 顶部注释）。
-                    string dictKey = ComboTradeState.BuildDictKey((string)BetInfo.raceNo, (string)BetInfo.type, (string)BetInfo.combo);
-                    _tradeRecordWriter.Enqueue(new TradeWriteJob
+                    string dictKey = ComboTradeState.BuildDictKey(betInfo.raceNo, betInfo.type, betInfo.combo);
+                    EnqueueTradeWrite(new TradeWriteJob
                     {
                         Kind = TradeWriteJobKind.SubmitResult,
                         DictKey = dictKey,
-                        EatBetInfo = EatBetInfo,
-                        BetInfo = BetInfo,
+                        EatBetInfo = eatBetInfo,
+                        BetInfo = betInfo,
                         Result = resultJObject,
                         AutoFlag = autoFlag,
                         OrderType = orderType,
@@ -2179,7 +2491,7 @@ namespace AutoHorseRace
                 }
                 else
                 {
-                    _Log.LogInfo($"[{BetInfo.type}][{BetInfo.combo}][{trade_type}][{BetInfo.odds}][{BetInfo.limit}]手工下注,不更新内存数据");
+                    _Log.LogInfo($"[{betInfo.type}][{betInfo.combo}][{trade_type}][{betInfo.odds}][{betInfo.limit}]手工下注,不更新内存数据");
                 }
             }
             return resultJObject;
@@ -2228,7 +2540,8 @@ namespace AutoHorseRace
                         ? eatGroups
                         : eatGroups.Where(g => allowedQCombos.Contains(g.Key)).ToDictionary(g => g.Key, g => g.Value);
                     // 4. 并行遍历过滤后的字典
-                    Parallel.ForEach(filteredEatGroups, kvp =>
+                    // V20260918_CODE_REVIEW_FIXES(7)：加上 MaxDegreeOfParallelism 上限。
+                    Parallel.ForEach(filteredEatGroups, new ParallelOptions { MaxDegreeOfParallelism = MaxComboParallelism }, kvp =>
                     {
                         string comboKey = kvp.Key;        // 当前的 combo 字符串 (如 "1-2")
                         var eatList = kvp.Value;          // 对应的 List<BetInfo>
@@ -2273,7 +2586,8 @@ namespace AutoHorseRace
                         ? eatGroups
                         : eatGroups.Where(g => allowedQPCombos.Contains(g.Key)).ToDictionary(g => g.Key, g => g.Value);
                     // 4. 并行遍历过滤后的字典
-                    Parallel.ForEach(filteredEatGroups, kvp =>
+                    // V20260918_CODE_REVIEW_FIXES(7)：加上 MaxDegreeOfParallelism 上限。
+                    Parallel.ForEach(filteredEatGroups, new ParallelOptions { MaxDegreeOfParallelism = MaxComboParallelism }, kvp =>
                     {
                         string comboKey = kvp.Key;        // 当前的 combo 字符串 (如 "1-2")
                         var eatList = kvp.Value;          // 对应的 List<BetInfo>
@@ -2288,23 +2602,20 @@ namespace AutoHorseRace
             }
         }
         /// <summary>
-        /// 刷新盘口数据列表，并且同时处理自动下注
+        /// 刷新盘口数据列表，并且同时处理自动下注。
+        /// 🆕 查询侧：对 _DSAccounts 中所有已登录的 DS 账户并发发起 queryMarket，
+        /// race 语义——谁先返回"成功且非空"的数据就用谁，其余请求结果忽略，
+        /// 只有全部账户都异常或返回空才判定本轮数据为空。
+        /// 🆕 分析侧：AutoBetting 通过 _autoBettingLock 任意时刻只允许一个实例串行执行。
+        /// 下单侧：AutoBetting → AutoBetProcess/AutoEatProcess → ExecuteTrade 内部
+        /// 硬编码使用 _EAAccount，与查询用哪个 DS 账户完全无关。
         /// </summary>
         public void RefreshBetInfoDataList()
         {
-            string serverProcessTime = "0ms";
             DateTime now = DateTime.Now;
             if (TryGetTradeTimeContext(out DateTime raceDateTime, out DateTime triggerStartTime, out DateTime triggerEndTime))
             {
-                IDictionary<string, List<BetInfo>> BetBatInfos = null;
-                if (string.Equals(_Config.DSServerAddress, _Config.EAServerAddress))
-                {
-                    BetBatInfos = HTTPHelper.queryMarket(_Config.EAServerAddress, _EAAccount.UserCode, _Config.CurrentRaceDate, _Config.CurrentRaceType, _Config.CurrentRaceNo, out serverProcessTime);
-                }
-                else
-                {
-                    BetBatInfos = HTTPHelper.queryMarket(_Config.DSServerAddress, _DSAccount.UserCode, _Config.CurrentRaceDate, _Config.CurrentRaceType, _Config.CurrentRaceNo, out serverProcessTime);
-                }
+                var (BetBatInfos, serverProcessTime) = QueryMarketRaceFromAllDSAccounts();
 
                 // 🔧 网络请求存在耗时，执行到这里时墙钟时间可能已经越过 triggerEndTime，
                 // 此时强平通道很可能已经并行启动。为避免两条通道同时对同一批 combo 各判各的、
@@ -2318,21 +2629,28 @@ namespace AutoHorseRace
 
                 if (BetBatInfos == null || BetBatInfos.Count == 0)
                 {
-                    _Log.LogInfo("queryMarket 数据为空");
+                    _Log.LogInfo($"queryMarket 数据为空 [{serverProcessTime}]");
                 }
                 if (BetBatInfos != null)
                 {
-                    _Log.LogInfo($"扫描结束,已获取数据");
+                    _Log.LogInfo($"扫描结束,已获取数据 [{serverProcessTime}]");
                     if (_EnableAutoTrade)
                     {
                         _Log.LogInfo("自动下注处理开始");
-                        RefreshMyTradeSnapshot();
-                        if (DateTime.Now >= triggerEndTime)
+
+                        // 🔒 分析串行化：不管本轮数据来自哪个 DS 账户、也不管有多少轮触发在排队，
+                        // AutoBetting（含内部 RefreshMyTradeSnapshot）任意时刻只允许一个实例在跑。
+                        lock (_autoBettingLock)
                         {
-                            _Log.LogInfo($"[{DateTime.Now:HH:mm:ss}] queryMyTrade 期间已达到下注截止[{triggerEndTime:HH:mm:ss}]，跳过本轮 AutoBetting，交由强平通道接管");
-                            return;
+                            RefreshMyTradeSnapshot();
+                            if (DateTime.Now >= triggerEndTime)
+                            {
+                                _Log.LogInfo($"[{DateTime.Now:HH:mm:ss}] queryMyTrade 期间已达到下注截止[{triggerEndTime:HH:mm:ss}]，跳过本轮 AutoBetting，交由强平通道接管");
+                                return;
+                            }
+                            AutoBetting(BetBatInfos);
                         }
-                        AutoBetting(BetBatInfos);
+
                         _Log.LogInfo("自动下注处理结束");
                     }
                     else
@@ -2364,6 +2682,82 @@ namespace AutoHorseRace
                     AutoToNextRace();
                 }
             }
+        }
+
+        /// <summary>
+        /// 🆕 对 _DSAccounts 中所有【已登录】的 DS 账户并发发起 queryMarket 查询（各自打各自的 BrokerServer，
+        /// 每个账户的地址来自 Config.json 中 DSServerAddress 逗号分隔列表里对应下标的地址），
+        /// race 语义：谁先返回"成功且非空"的数据，就立即用它作为本轮 AutoBetting 的唯一数据源。
+        /// 未被选中（含仍在进行中）的请求结果一律忽略，不取消、不合并、不等待。
+        /// 只有全部（已登录）账户都异常或返回空，才等它们全部跑完后判定本轮"数据为空"。
+        ///
+        /// 注意：HTTPHelper.queryMarket 当前签名不支持 CancellationToken，被忽略的慢请求
+        /// 无法真正取消，会在后台自然跑完，只是结果不被使用；如果账户数量多、轮询频繁，
+        /// 这些"陪跑"请求会持续占用线程池和对端连接数，值得关注。
+        /// </summary>
+        private (IDictionary<string, List<BetInfo>> data, string serverProcessTime) QueryMarketRaceFromAllDSAccounts()
+        {
+            if (_DSAccounts == null || _DSAccounts.Count == 0)
+            {
+                _Log.LogInfo("[QueryMarketRace] _DSAccounts 为空，跳过查询");
+                return (null, "0ms");
+            }
+
+            var loginAccounts = _DSAccounts.Where(a => a != null && a.IsLogin).ToList();
+            if (loginAccounts.Count == 0)
+            {
+                _Log.LogInfo($"[QueryMarketRace] _DSAccounts[{_DSAccounts.Count}个] 均未登录，跳过查询");
+                return (null, "0ms");
+            }
+            if (loginAccounts.Count < _DSAccounts.Count)
+            {
+                var offline = _DSAccounts.Where(a => a == null || !a.IsLogin)
+                    .Select(a => a == null ? "null" : $"{a.BrokerCode}/{a.UserCode}");
+                _Log.LogInfo($"[QueryMarketRace] 跳过未登录账户: [{string.Join(", ", offline)}]");
+            }
+
+            var pending = loginAccounts.Select(account => Task.Run(() =>
+            {
+                try
+                {
+                    var data = HTTPHelper.queryMarket(
+                        account.BrokerServer, account.UserCode,
+                        _Config.CurrentRaceDate, _Config.CurrentRaceType, _Config.CurrentRaceNo,
+                        out string pt);
+                    return (account, data, pt, ex: (Exception)null);
+                }
+                catch (Exception ex)
+                {
+                    return (account, data: (IDictionary<string, List<BetInfo>>)null, pt: "异常", ex);
+                }
+            })).ToList();
+
+            while (pending.Count > 0)
+            {
+                var finished = (Task<(Account account, IDictionary<string, List<BetInfo>> data, string pt, Exception ex)>)
+                    Task.WhenAny(pending).GetAwaiter().GetResult();
+
+                pending.Remove(finished);
+                var (account, data, pt, ex) = finished.Result;
+
+                if (ex != null)
+                {
+                    _Log.LogInfo($"[DS账户][{account.BrokerCode}/{account.BrokerServer}][{account.UserCode}][queryMarket] 请求异常: {ex.Message}，race 中跳过该路，等待其余账户");
+                    continue;
+                }
+                if (data == null || data.Count == 0)
+                {
+                    _Log.LogInfo($"[DS账户][{account.BrokerCode}/{account.BrokerServer}][{account.UserCode}][queryMarket] 返回数据为空，race 中跳过该路，等待其余账户");
+                    continue;
+                }
+
+                // ✅ 命中：第一份成功且非空的数据，立即返回，剩余仍在跑的请求结果直接忽略
+                _Log.LogInfo($"[DS账户][{account.BrokerCode}/{account.BrokerServer}][{account.UserCode}][queryMarket] race 胜出，用时[{pt}]，采用该路数据进入分析");
+                return (data, $"{account.UserCode}:{pt}(race胜出)");
+            }
+
+            // 全部（已登录）账户都异常或为空，等它们都跑完才走到这里判定
+            return (null, "全部已登录DS账户查询为空或异常");
         }
         /// <summary>
         /// 计算时间并直接在内部判断当前是否符合下注配置时间区间
@@ -2444,7 +2838,7 @@ namespace AutoHorseRace
                     System.Windows.Forms.MessageBox.Show("请输入账号、密码 和 安码！", "提示", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
                     return; // 终止后续登录逻辑
                 }
-                // 1. 直接在主线程立刻更新 UI（显示“登录中”和动画），绝对不能在这里卡顿！
+                // 1. 直接在主线程立刻更新 UI（显示"登录中"和动画），绝对不能在这里卡顿！
                 UpdateLoginConnectStatus(buttonAccountLogin, 2);
                 // 2. 将耗时的网络登录请求放到后台线程异步执行，避免卡死界面
                 bool isSuccess = await Task.Run(() =>
@@ -2573,115 +2967,144 @@ namespace AutoHorseRace
                 }
             }
         }
+        /// <summary>
+        /// 🆕 读水账户登陆：textBoxDSAccountCode/Password/Pin 支持英文逗号分隔多个账户，
+        /// 各账户对应的服务器地址来自 _Config.DSServerAddress（同样逗号分隔，只在 Config.json
+        /// 中维护，不经界面输入），按下标一一对应。点击登陆后并发对所有解析出的账户逐一尝试登陆
+        /// （网络请求本身串行发起、避免瞬间打满连接，但都在后台线程执行、不阻塞 UI），
+        /// 只要有一个账户登陆成功就显示"已登陆"；无论成功与否，全部账户的登陆结果都会打印到日志中。
+        /// </summary>
         private async void buttonDSLogin_Click(object sender, EventArgs e)
         {
-            _Log.LogInfo($"开始登陆[{_DSAccount.UserCode}]");
             if (string.Equals(buttonDSLogin.Text, "未登陆"))
             {
-                // ⚡ 检查 UserCode、Password、Pin 是否为空或未填写
-                if (string.IsNullOrWhiteSpace(_DSAccount.UserCode) ||
-                    string.IsNullOrWhiteSpace(_DSAccount.Password) ||
-                    string.IsNullOrWhiteSpace(_DSAccount.Pin))
+                if (string.IsNullOrWhiteSpace(textBoxDSAccountCode.Text) ||
+                    string.IsNullOrWhiteSpace(textBoxDSAccountPassword.Text) ||
+                    string.IsNullOrWhiteSpace(textBoxDSAccountPin.Text))
                 {
-                    System.Windows.Forms.MessageBox.Show("请输入账号、密码 和 安码！", "提示", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
-                    return; // 终止后续登录逻辑
+                    MessageBox.Show("请输入账号、密码 和 安码（多个账户请用英文逗号分隔）！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
                 }
-                // 1. 直接在主线程立刻更新 UI（显示“登录中”和动画）
-                UpdateDSConnectStatus(buttonDSLogin, 2);
-                // 2. 将耗时的网络登录请求放到后台线程异步执行，避免卡死界面
-                bool isSuccess = await Task.Run(() =>
+
+                var accountsToLogin = BuildDSAccountsFromInput(textBoxDSAccountCode.Text, textBoxDSAccountPassword.Text, textBoxDSAccountPin.Text, _Config.DSServerAddress);
+                if (accountsToLogin.Count == 0)
                 {
-                    try
-                    {
-                        if (string.Equals(_Config.DSServerAddress, _Config.EAServerAddress))
-                        {
-                            return true;
-                        }
-                        else
-                        {
-                            // 如果这里有真实的 HTTP 请求，放这里执行
-                            JObject loginResult = HTTPHelper.login(_Config.DSServerAddress, _DSAccount.UserCode, _DSAccount.Password, _DSAccount.Pin);
-                            if (loginResult == null)
-                            {
-                                _Log.LogInfo("登陆异常");
-                                return false;
-                            }
-                            else
-                            {
-                                _Log.LogInfo($"[性能监控][buttonDSLogin][login] 后端服务耗时: {loginResult["serverProcessTime"]}");
-                                return (bool)loginResult["success"];
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex.ToString());
-                        return false;
-                    }
-                });
-                if (isSuccess)
+                    MessageBox.Show("未解析到有效的读水账户，请检查输入格式！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                if (accountsToLogin.Any(a => string.IsNullOrWhiteSpace(a.BrokerServer)))
                 {
-                    _Log.LogInfo("登陆成功");
-                    // 3. 启动后台初始化任务（避免阻塞 UI）
-                    _ = Task.Run(async () =>
+                    MessageBox.Show("部分账户未配置对应的服务器地址，请检查 Config.json 中 DSServerAddress 是否与账号数量一致（逗号分隔）！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                _Log.LogInfo($"开始登陆读水账户[{accountsToLogin.Count}个]: [{string.Join(", ", accountsToLogin.Select(a => $"{a.UserCode}@{a.BrokerServer}"))}]");
+                UpdateDSConnectStatus(buttonDSLogin, 2); // 登陆中
+
+                var loginResults = await Task.Run(() =>
+                {
+                    var results = new List<(Account account, bool success, string message)>();
+                    foreach (var account in accountsToLogin)
                     {
                         try
                         {
-                            _Log.LogInfo("系统初始化进行中...");
-                            await Task.Delay(5000);
-                            _DSAccount.IsLogin = true;
-                            ResetAccountDisconnectedNotifyFlag("DS"); // 🔧 重新登录成功，清掉上次断链的提示标记
-                            // 跨线程安全更新登录成功 UI
-                            this.Invoke(new Action(() =>
+                            // 🔧 不再跟 _Config.DSServerAddress 整体比较，而是每个账户各自跟
+                            // EAServerAddress 比较，因为现在每个 DS 账户可能打不同的服务器地址。
+                            if (string.Equals(account.BrokerServer, _Config.EAServerAddress))
                             {
-                                UpdateDSConnectStatus(buttonDSLogin, 1);
-                            }));
-                            _Log.LogInfo("系统初始化完成");
+                                results.Add((account, true, "与打水账号同服务器，无需单独登陆"));
+                                continue;
+                            }
+                            JObject loginResult = HTTPHelper.login(account.BrokerServer, account.UserCode, account.Password, account.Pin);
+                            if (loginResult != null && (bool)loginResult["success"])
+                            {
+                                _Log.LogInfo($"[性能监控][buttonDSLogin][login][{account.UserCode}@{account.BrokerServer}] 后端服务耗时: {loginResult["serverProcessTime"]}");
+                                results.Add((account, true, "登陆成功"));
+                            }
+                            else
+                            {
+                                results.Add((account, false, "登陆失败"));
+                            }
                         }
                         catch (Exception ex)
                         {
                             _logger.Error(ex.ToString());
+                            results.Add((account, false, $"登陆异常: {ex.Message}"));
                         }
-                    });
+                    }
+                    return results;
+                });
+
+                int successCount = 0;
+                foreach (var (account, success, message) in loginResults)
+                {
+                    account.IsLogin = success;
+                    if (success) successCount++;
+                }
+
+                _DSAccounts = accountsToLogin;
+                // _DSAccount 保留指向第一个账户，兼容其它仍引用单个 _DSAccount 的地方
+                // （余额查询 UpdateAccountBalanceInfo("DS")、断线提示 HandleAccountDisconnected("DS") 等）。
+                _DSAccount = accountsToLogin[0];
+                if (_MyConfig.DSAccount == null) _MyConfig.DSAccount = new Account();
+                // 把原始逗号分隔文本整存回配置，下次 LoadConfigFile/IniUI 能原样还原多账户输入框内容。
+                // 服务器地址（_Config.DSServerAddress）不经界面输入，此处不改动，仍以 Config.json 为准。
+                _MyConfig.DSAccount.UserCode = textBoxDSAccountCode.Text;
+                _MyConfig.DSAccount.Password = textBoxDSAccountPassword.Text;
+                _MyConfig.DSAccount.Pin = textBoxDSAccountPin.Text;
+
+                // 🆕 无论成功或失败，把全部账户的登陆结果输出到日志。
+                if (successCount > 0)
+                {
+                    _Log.LogInfo($"读水账户登陆完成[{successCount}/{accountsToLogin.Count}个成功]，明细如下：");
+                    foreach (var (account, success, message) in loginResults)
+                    {
+                        _Log.LogInfo($"  [读水账户][{account.UserCode}@{account.BrokerServer}] {(success ? "✅ 成功" : "❌ 失败")} - {message}");
+                    }
+                    // 🆕 只要有一个账户登陆成功，就显示"已登陆"。
+                    ResetAccountDisconnectedNotifyFlag("DS");
+                    UpdateDSConnectStatus(buttonDSLogin, 1);
                 }
                 else
                 {
-                    _Log.LogInfo("登陆失败");
-                    // 登录失败时恢复按钮状态
+                    _Log.LogInfo($"读水账户全部登陆失败[0/{accountsToLogin.Count}个成功]，明细如下：");
+                    foreach (var (account, success, message) in loginResults)
+                    {
+                        _Log.LogInfo($"  [读水账户][{account.UserCode}@{account.BrokerServer}] ❌ 失败 - {message}");
+                    }
                     UpdateDSConnectStatus(buttonDSLogin, 0);
                 }
             }
-            if (string.Equals(buttonDSLogin.Text, "已登陆"))
+            else if (string.Equals(buttonDSLogin.Text, "已登陆"))
             {
-                if (string.Equals(_Config.DSServerAddress, _Config.EAServerAddress))
+                var accountsToLogout = (_DSAccounts != null && _DSAccounts.Count > 0)
+                    ? _DSAccounts
+                    : (_DSAccount != null ? new List<Account> { _DSAccount } : new List<Account>());
+
+                foreach (var account in accountsToLogout)
                 {
-                    _Log.LogInfo("已登出");
-                    _DSAccount.IsLogin = false;
-                    UpdateDSConnectStatus(buttonDSLogin, 0);
-                }
-                else
-                {
-                    // 如果这里有真实的 HTTP 请求，放这里执行
-                    JObject logoutResult = HTTPHelper.logout(_Config.DSServerAddress, _DSAccount.UserCode);
-                    if (logoutResult == null)
+                    if (account == null || !account.IsLogin) continue;
+                    // 🔧 按账户自己的服务器地址判断，不再用 _Config.DSServerAddress 整体比较
+                    if (string.Equals(account.BrokerServer, _Config.EAServerAddress))
                     {
-                        _Log.LogInfo("登出失败");
-                        _DSAccount.IsLogin = false;
-                        UpdateDSConnectStatus(buttonDSLogin, 0);
+                        account.IsLogin = false;
+                        continue;
+                    }
+                    JObject logoutResult = HTTPHelper.logout(account.BrokerServer, account.UserCode);
+                    if (logoutResult != null && (bool)logoutResult["success"])
+                    {
+                        _Log.LogInfo($"[性能监控][buttonDSLogin][logout][{account.UserCode}@{account.BrokerServer}] 后端服务耗时: {logoutResult["serverProcessTime"]}");
                     }
                     else
                     {
-                        if ((bool)logoutResult["success"])
-                        {
-                            _Log.LogInfo($"[性能监控][buttonDSLogin][logout] 后端服务耗时: {logoutResult["serverProcessTime"]}");
-                            _Log.LogInfo("已登出");
-                            _DSAccount.IsLogin = false;
-                            _Log.LogInfo("扫描已停止");
-                            UpdateQueryEATBETInfoStatus("扫描已停止");
-                            UpdateDSConnectStatus(buttonDSLogin, 0);
-                        }
+                        _logger.Error($"[读水账户][{account.UserCode}@{account.BrokerServer}] 登出请求失败或无响应");
                     }
+                    account.IsLogin = false;
                 }
+                _Log.LogInfo("读水账户已全部登出");
+                _Log.LogInfo("扫描已停止");
+                UpdateQueryEATBETInfoStatus("扫描已停止");
+                UpdateDSConnectStatus(buttonDSLogin, 0);
             }
         }
         private void EAForm_Load(object sender, EventArgs e)
@@ -2744,7 +3167,18 @@ namespace AutoHorseRace
                     }
                 }
             }
-            JObject raceInfoResult = HTTPHelper.queryRaceInfo(_Config.EAServerAddress, _EAAccount.UserCode, _Config.CurrentRaceDate, _Config.CurrentRaceType, _Config.CurrentRaceNo);
+            QueryAndApplyRaceInfo();
+        }
+        /// <summary>
+        /// 查询当前赛场（_Config.CurrentRaceType）的场次信息并据此刷新 comboBoxRaceNo/开赛时间：
+        /// 优先用后端 HTTPHelper.queryRaceInfo 返回的场次列表；查询失败或返回不成功时，
+        /// 回退到数据库配置里的 Horse.{RaceType}.RCsTime 静态时间表。
+        /// 从 comboBoxRaceType_SelectedIndexChanged 里抽出来，便于后续在其它地方
+        /// （比如切换赛场类型之外的场景）复用同一套刷新逻辑。
+        /// </summary>
+        private void QueryAndApplyRaceInfo()
+        {
+            JObject raceInfoResult = HTTPHelper.queryAllRaceInfo(_Config.EAServerAddress, _EAAccount.UserCode, _Config.CurrentRaceDate, _Config.CurrentRaceType, _Config.CurrentRaceNo);
             if (raceInfoResult != null && (bool)raceInfoResult["success"])
             {
                 _Log.LogInfo($"[性能监控][comboBoxRaceType][queryRaceInfo] 后端服务耗时: {raceInfoResult["serverProcessTime"]}");
@@ -2890,7 +3324,10 @@ namespace AutoHorseRace
                     MessageBox.Show("请先登陆打水账号,再启动自动扫描！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
-                if (!_DSAccount.IsLogin)
+                // 🆕 只要 _DSAccounts 中有任意一个账户在线，就允许启动扫描（对应"任一成功即已登陆"）。
+                bool anyDSLogin = (_DSAccounts != null && _DSAccounts.Any(a => a != null && a.IsLogin))
+                                   || (_DSAccount != null && _DSAccount.IsLogin);
+                if (!anyDSLogin)
                 {
                     MessageBox.Show("请先登陆读水账号,再启动自动扫描！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
@@ -3031,13 +3468,32 @@ namespace AutoHorseRace
                 _Log.LogInfo("自动转场处理");
                 _timerRefreshBetInfoForClosePosition.Stop();
                 // ==========================================
+                // 💡 转场前先把服务器端交易数据完整同步到本地数据库，确保服务器端和数据库一致，
+                // 避免上一场最后几笔成交/补写还没落库就被下面的清空动作冲掉。
+                // ==========================================
+                // 1. 先从服务器刷新一次内存快照（_AllMyTradesList 等），保证内存里是最新数据。
+                RefreshMyTradeSnapshot();
+                // 2. 把最新的内存快照整体入队写库（覆盖 CONFIRMED 状态的所有成交记录）。
+                RefreshTradeListToDB();
+                // 3. 停止接收新的落库 job，并等待已入队 job 全部写完（最多等 10 秒），
+                //    确保上面第 2 步入队的 job 在清空内存字典/状态之前已经落库完成；
+                //    随后立即重新创建一个新的 TradeRecordWriter 供下一场继续使用。
+                //    整段 Stop+重建 用 _tradeRecordWriterLock 包裹，防止其它线程此时正在
+                //    Enqueue（ExecuteTrade / RefreshTradeListToDB 的下一轮定时器）撞上已经
+                //    Complete() 的旧 Channel 而抛出 ChannelClosedException 导致数据丢失。
+                lock (_tradeRecordWriterLock)
+                {
+                    _tradeRecordWriter?.Stop(TimeSpan.FromSeconds(10));
+                    _tradeRecordWriter = CreateTradeRecordWriter();
+                }
+                _Log.LogInfo("转场前服务器交易数据已全部同步到本地数据库。");
+                // ==========================================
                 // 💡 盘口及缓存数据清理（防止上一场数据污染下一场）
                 // ==========================================
-                // 1. 清空上一场的全局交易字典与列表
+                // 4. 数据库已经确认写完，现在再清空上一场的全局交易字典与列表。
                 _EatBetInfoDict?.Clear();
                 _EatBetInfosList?.Clear();
                 _AllMyTradesList?.Clear();
-                RefreshMyTradeList(null);
                 _Config.TradeStateStore.ClearRace(_Config.CurrentRaceNo); // 只清上一场
                 _betLocks?.Clear();
                 _eatLocks?.Clear();
@@ -3049,6 +3505,46 @@ namespace AutoHorseRace
                         int currentIndex = comboBoxRaceNo.SelectedIndex;
                         int nextIndex = currentIndex + 1;
                         _Log.LogInfo($"自动切换到下一场:[{comboBoxRaceNo.Text}] -> [{comboBoxRaceNo.Items[nextIndex]}]");
+                        // 在转场前重新查询下一场的开赛时间，避免沿用上一场遗留的 CurrentRaceTime
+                        // 导致强平/自动下注时间窗口判断用的是错误的开赛时间。
+                        string nextRaceNo = comboBoxRaceNo.Items[nextIndex].ToString();
+                        JObject raceInfoResult = HTTPHelper.queryRaceInfo(_Config.EAServerAddress, _EAAccount.UserCode, _Config.CurrentRaceDate, _Config.CurrentRaceType, nextRaceNo);
+                        if (raceInfoResult != null && (bool)raceInfoResult["success"])
+                        {
+                            JObject dataObj = raceInfoResult["data"] as JObject;
+                            // 优先在 available_races 里按 race_num 精确匹配下一场；查不到再兜底用 race_time_info
+                            // （接口按 race_num 请求时通常只返回这一场，两者内容一致）。
+                            string rawTimeStr = null;
+                            if (dataObj?["available_races"] is JArray availableRaces)
+                            {
+                                foreach (var item in availableRaces)
+                                {
+                                    if (string.Equals(item["race_num"]?.ToString(), nextRaceNo))
+                                    {
+                                        rawTimeStr = item["time"]?.ToString();
+                                        break;
+                                    }
+                                }
+                            }
+                            if (string.IsNullOrEmpty(rawTimeStr))
+                            {
+                                rawTimeStr = dataObj?["race_time_info"]?.ToString();
+                            }
+                            if (!string.IsNullOrEmpty(rawTimeStr) && TryParseRaceTimeTo24Hour(rawTimeStr, out string raceTime24))
+                            {
+                                _Config.CurrentRaceTime = raceTime24;
+                                textBoxCurrentRaceTime.Text = _Config.CurrentRaceTime;
+                                _Log.LogInfo($"转场前重新查询到下一场[{nextRaceNo}]开赛时间: '{rawTimeStr}' -> '{raceTime24}'");
+                            }
+                            else
+                            {
+                                _logger.Error($"[自动转场] 解析下一场[{nextRaceNo}]开赛时间失败，原始字符串='{rawTimeStr}'，本次转场沿用旧的 CurrentRaceTime='{_Config.CurrentRaceTime}'");
+                            }
+                        }
+                        else
+                        {
+                            _logger.Error($"[自动转场] queryRaceInfo 查询下一场[{nextRaceNo}]开赛时间失败，本次转场沿用旧的 CurrentRaceTime='{_Config.CurrentRaceTime}'");
+                        }
                         comboBoxRaceNo.SelectedIndex = nextIndex;
                     }
                     else
@@ -3063,6 +3559,35 @@ namespace AutoHorseRace
             {
                 _Log.LogInfo("自动转场未启动");
             }
+        }
+        /// <summary>
+        /// 把 queryRaceInfo 等接口返回的、类似 "10:55pm - Race 8" 或单独 "10:55pm"
+        /// 这种 12 小时制、带 am/pm 后缀（可能还带 " - Race N" 尾巴）的时间字符串，解析成
+        /// _Config.CurrentRaceTime 期望的 "HH:mm" 24 小时制格式——后续 TimeSpan.TryParse 以及
+        /// "yyyy-MM-dd HH:mm:ss" 的 DateTime.TryParseExact（强制平仓等时间窗口判断）都是按这个
+        /// 格式解析的，格式不对会导致这些判断直接失败退出。
+        /// 用手写的正则+数值换算而不是 DateTime.TryParseExact("h:mmtt", ...)，是为了不依赖具体
+        /// 运行环境 CultureInfo 对 AM/PM 大小写的处理是否一致，行为更可预测、也方便在失败时
+        /// 精确知道是哪一步没匹配上。
+        /// </summary>
+        private static bool TryParseRaceTimeTo24Hour(string rawTimeStr, out string raceTime24)
+        {
+            raceTime24 = null;
+            if (string.IsNullOrWhiteSpace(rawTimeStr)) return false;
+            // 例如 "10:55pm - Race 8" / "10:55pm"，取空格分隔后的第一段 "10:55pm"
+            string timePart = rawTimeStr.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            if (string.IsNullOrEmpty(timePart)) return false;
+            var match = System.Text.RegularExpressions.Regex.Match(
+                timePart, @"^(?<hour>\d{1,2}):(?<minute>\d{2})\s*(?<ampm>[AaPp][Mm])$");
+            if (!match.Success) return false;
+            int hour = int.Parse(match.Groups["hour"].Value);
+            int minute = int.Parse(match.Groups["minute"].Value);
+            if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return false;
+            string ampm = match.Groups["ampm"].Value.ToUpperInvariant();
+            if (ampm == "PM" && hour != 12) hour += 12;
+            else if (ampm == "AM" && hour == 12) hour = 0;
+            raceTime24 = $"{hour:D2}:{minute:D2}";
+            return true;
         }
         /// <summary>
         /// 定时刷新下注列表，数据来源位本地数据库
@@ -3106,7 +3631,7 @@ namespace AutoHorseRace
                 // 同一条按 dictKey 分片、严格串行的写入通道，彻底消除"两条通道同时写同一个
                 // TradeRecordId"导致的外键竞态（原来靠 ResetTradeRecordId() 硬扛的那个问题）。
                 // 失败重试 / 死信日志 / TradeRecordId 失效后的重置，全部下沉到 TradeRecordWriter 里统一处理。
-                _tradeRecordWriter.Enqueue(new TradeWriteJob
+                EnqueueTradeWrite(new TradeWriteJob
                 {
                     Kind = TradeWriteJobKind.PeriodicRefresh,
                     DictKey = dictKey,
@@ -3176,7 +3701,8 @@ namespace AutoHorseRace
             using (Pen pen = new Pen(Color.FromArgb(0, 120, 215), 3))
             {
                 // 绘制一段120度的弧线
-                e.Graphics.DrawArc(pen, rect, _ProcessingAngle, 120);
+                // V20260918_CODE_REVIEW_FIXES(1)：改用独立的 _scanProcessingAngle，不再跟登陆动画共用角度。
+                e.Graphics.DrawArc(pen, rect, _scanProcessingAngle, 120);
             }
         }
         private void pictureBoxLoginProcessing_Paint(object sender, PaintEventArgs e)
@@ -3190,7 +3716,8 @@ namespace AutoHorseRace
             using (Pen pen = new Pen(Color.FromArgb(0, 120, 215), 3))
             {
                 // 绘制一段120度的弧线
-                e.Graphics.DrawArc(pen, rect, _ProcessingAngle, 120);
+                // V20260918_CODE_REVIEW_FIXES(1)：改用独立的 _loginProcessingAngle。
+                e.Graphics.DrawArc(pen, rect, _loginProcessingAngle, 120);
             }
         }
         private void dataGridViewEATBetInfoList_CellContentClick(object sender, DataGridViewCellEventArgs e)
@@ -3295,7 +3822,8 @@ namespace AutoHorseRace
             using (Pen pen = new Pen(Color.FromArgb(0, 120, 215), 3))
             {
                 // 绘制一段120度的弧线
-                e.Graphics.DrawArc(pen, rect, _ProcessingAngle, 120);
+                // V20260918_CODE_REVIEW_FIXES(1)：改用独立的 _dsLoginProcessingAngle。
+                e.Graphics.DrawArc(pen, rect, _dsLoginProcessingAngle, 120);
             }
         }
         private void buttonAutoBettingStatus_Click(object sender, EventArgs e)
@@ -3437,27 +3965,31 @@ namespace AutoHorseRace
             }
         }
         /// <summary>
-        /// 刷新下注列表数据，数据来源为本地数据库。
+        /// 刷新下注列表数据，数据来源改为内存中的 _EatBetInfosList（由 RefreshMyTradeSnapshot() /
+        /// QueryAndApplyMyTradeSnapshotAsync() 里 Utils.Utils.GetBatBetInfo(...) 构造并整体重新赋值），
+        /// 不再每次都查数据库，减少刷新时的 DB 开销。
         ///
-        /// 🔧 已回退"改读内存 _EatBetInfosList"的调整：实测发现只要一个组合还没有产生任何
-        /// "吃"的成交（比如截图里的场景——3 个组合都只提交了 BET、吃笔数=0），
-        /// Utils.Utils.GetBatBetInfo(...) 生成的 _EatBetInfosList/_EatBetInfoDict 里就不会包含
-        /// 这些组合（或者字段填充不满足表格列绑定的预期），导致表格整体空白——但数据库里
-        /// （及 TradeStateStore 内存状态里）其实已经正确记录了这些下注。
-        /// 由于目前没有 Utils.Utils.GetBatBetInfo 的源码，无法确认它具体按什么口径过滤/构造
-        /// _EatBetInfosList，为避免继续猜测导致界面再次出问题，这里先改回从数据库查询展示，
-        /// 恢复到已验证可用的状态。如果之后要重新尝试"读内存以避免落库延迟"，需要先拿到
-        /// Utils.Utils.GetBatBetInfo（或 EatBetInfo 类定义）的源码，确认它是否遗漏了"只有赌、
-        /// 还没吃"的组合，再按 ComboTradeState（这个是全量、权威的每组合状态）重新构造展示用的
-        /// EatBetInfo 列表，而不是直接依赖 _EatBetInfosList。
+        /// 🔧 重新改回读内存：之前（见历史注释）发现的已知缺陷依然存在——如果某个组合还没有
+        /// 任何"吃"成交（吃笔数=0，只有 BET），_EatBetInfosList/_EatBetInfoDict 里不会包含
+        /// 这些组合，对应行不会出现在表格里（数据库/TradeStateStore 里其实已经正确记录）。
+        /// 这是按需求明确接受的已知限制，不在这次改动里处理。后续如需修复，需要
+        /// Utils.Utils.GetBatBetInfo（或 EatBetInfo/ComboTradeState 定义）的源码，基于
+        /// _Config.TradeStateStore（全量权威的每组合状态）重新构造一份不遗漏"只赌未吃"组合的
+        /// 展示用列表，而不是直接依赖 _EatBetInfosList。
+        ///
+        /// 线程安全说明：_EatBetInfosList 每次都是整体重新赋值为一个新 List（见
+        /// RefreshMyTradeSnapshot / QueryAndApplyMyTradeSnapshotAsync 里的 `_EatBetInfosList = eatBetInfosList;`），
+        /// 旧的 List 对象发布后不会再被原地修改，所以这里先用局部变量接住当前引用再遍历，
+        /// 是一次安全的快照读取，不会跟并发的重新赋值互相踩踏。
         /// </summary>
         private void RefreshBettingInfoDataList()
         {
             if (_EAAccount.IsLogin && _EnableBettingInfoRefresh)
             {
+                // 快照当前引用，避免遍历过程中被其它线程重新赋值。
+                var bettingInfos = _EatBetInfosList;
                 _BettingList.RaiseListChangedEvents = false;
                 _BettingList.Clear();
-                List<EatBetInfo> bettingInfos = DBHelper.queryBettingInfoList(_EAAccount.UserCode, _Config.CurrentRaceType, _Config.CurrentRaceDate, _Config.CurrentRaceNo);
                 if (bettingInfos != null && bettingInfos.Count > 0)
                 {
                     foreach (var item in bettingInfos)

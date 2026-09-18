@@ -1036,7 +1036,7 @@ namespace AutoHorseRace.Utils
         /// <summary>
         /// 查询指定赛事信息,当前场次,开赛时间,总场次数
         /// </summary>
-        public static JObject queryRaceInfo(string serverAddress, string username, string raceDate, string raceType, string raceNo)
+        public static JObject queryAllRaceInfo(string serverAddress, string username, string raceDate, string raceType, string raceNo)
         {
             string result;
             var payloadObj = new
@@ -1046,6 +1046,55 @@ namespace AutoHorseRace.Utils
                 race_date = raceDate
             };
             string url = $"http://{serverAddress}/query/race-times";
+            string payload = JsonConvert.SerializeObject(payloadObj);
+            string serverProcessTime = "0ms";
+
+            if (_isUseServer)
+            {
+                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime);
+                _logger.Debug($"queryAllRaceInfo result: {result}");
+            }
+            else
+            {
+                result = File.ReadAllText(@"C:\D\07-svn\01-gold\AutoHorseRace\devdoc\v2\venue-race-info_response.json");
+                serverProcessTime = "local_file";
+            }
+
+            try
+            {
+                JObject jsonResult = JObject.Parse(result);
+                jsonResult["serverProcessTime"] = serverProcessTime; // 注入耗时
+
+                if (jsonResult["success"] != null && (bool)jsonResult["success"])
+                {
+                    _logger.Debug($"✅ [queryAllRaceInfo] 账户 [{username}] 查询赛事信息列表成功 (耗时: {serverProcessTime})");
+                }
+                else
+                {
+                    string errorMsg = jsonResult["message"]?.ToString() ?? jsonResult["detail"]?.ToString() ?? "未知错误";
+                    _logger.Error($"❌ [queryAllRaceInfo] 账户 [{username}] 查询返回失败状态: {errorMsg}");
+                }
+
+                return jsonResult;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"❌ [queryAllRaceInfo] JSON 解析异常: {result}");
+                return null;
+            }
+        }
+
+        public static JObject queryRaceInfo(string serverAddress, string username, string raceDate, string raceType, string raceNo)
+        {
+            string result;
+            var payloadObj = new
+            {
+                username = username,
+                race_type = raceType,
+                race_date = raceDate,
+                race_num = raceNo
+            };
+            string url = $"http://{serverAddress}/query/venue-race-info";
             string payload = JsonConvert.SerializeObject(payloadObj);
             string serverProcessTime = "0ms";
 
