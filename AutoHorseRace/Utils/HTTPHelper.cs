@@ -18,6 +18,12 @@ namespace AutoHorseRace.Utils
         /// </summary>
         private static bool _isUseServer = true;
 
+        // 🆕 V20260923_HTTPHELPER_TIMEOUT：本文件所有对 HTTPUtils.SendSyncRequest 的调用统一
+        // 传入 2 秒超时（通过 HTTPUtils.SendSyncRequest 新增的 timeoutSeconds 参数，内部用
+        // CancellationTokenSource 实现，不影响 HttpClient 的 20 秒全局默认值，也不影响其它调用方）。
+        // 这里单独提一个常量，避免 13 处调用各自散落一个魔法数字 2，后续要统一调整超时时只改这一处。
+        private const int RequestTimeoutSeconds = 3;
+
         /// <summary>
         /// 登陆
         /// </summary>
@@ -42,7 +48,7 @@ namespace AutoHorseRace.Utils
             string serverProcessTime = "0ms";
             if (_isUseServer)
             {
-                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime);
+                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime, 15);
                 _logger.Debug($"login result: {result}");
             }
             else
@@ -88,7 +94,7 @@ namespace AutoHorseRace.Utils
             string serverProcessTime = "0ms";
             if (_isUseServer)
             {
-                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime);
+                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime, RequestTimeoutSeconds);
                 _logger.Debug($"logout result: {result}");
             }
             else
@@ -143,7 +149,7 @@ namespace AutoHorseRace.Utils
 
             if (_isUseServer)
             {
-                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime);
+                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime, RequestTimeoutSeconds);
                 _logger.Debug($"queryBalance result: {result}");
             }
             else
@@ -205,7 +211,7 @@ namespace AutoHorseRace.Utils
             // 💡 必须在分支中对 out 参数赋初始值
             if (_isUseServer)
             {
-                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime);
+                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime, RequestTimeoutSeconds);
                 _logger.Debug($"queryMarket result: {result}");
             }
             else
@@ -470,7 +476,7 @@ namespace AutoHorseRace.Utils
             // 💡 必须在所有分支中对 out 参数赋初始值
             if (_isUseServer)
             {
-                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime);
+                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime, RequestTimeoutSeconds);
                 _logger.Debug($"queryMyTrade result: {result}");
             }
             else
@@ -589,7 +595,7 @@ namespace AutoHorseRace.Utils
 
             if (_isUseServer)
             {
-                result = HTTPUtils.SendSyncRequest(url, "GET", null, null, null, out serverProcessTime);
+                result = HTTPUtils.SendSyncRequest(url, "GET", null, null, null, out serverProcessTime, 20);
                 _logger.Debug($"querySettledHistoryInfo result: {result}");
             }
             else
@@ -664,7 +670,7 @@ namespace AutoHorseRace.Utils
 
             if (_isUseServer)
             {
-                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime);
+                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime, 20);
                 _logger.Debug($"querySettledInfo result: {result}");
             }
             else
@@ -798,7 +804,7 @@ namespace AutoHorseRace.Utils
 
             if (_isUseServer)
             {
-                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime);
+                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime, RequestTimeoutSeconds);
                 _logger.Debug($"submitOrder result: {result}");
             }
             else
@@ -879,7 +885,7 @@ namespace AutoHorseRace.Utils
 
             if (_isUseServer)
             {
-                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime);
+                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime, RequestTimeoutSeconds);
                 _logger.Debug($"singleAutoTrade result: {result}");
             }
             else
@@ -911,7 +917,7 @@ namespace AutoHorseRace.Utils
                 {
                     string errorMsg = resultJObject["message"]?.ToString() ?? resultJObject["detail"]?.ToString() ?? "未知错误";
                     _logger.Error($"singleAutoTrade failed: {errorMsg}");
-                    // 🔧 关键修复：与 submitOrder 同理。这类响应（如 {"code":400,"message":"单笔交易未确认: 
+                    // 🔧 关键修复：与 submitOrder 同理。这类响应（如 {"code":400,"message":"单笔交易未确认:
                     // 对不起！ 你的交易不成功。","success":false}）是服务器正常处理完成后给出的明确业务拒绝，
                     // HTTP 请求本身没有任何异常（能被成功 JObject.Parse 就说明是合法完整的响应），
                     // 必须原样返回，让上层能区分"明确拒绝"和"网络异常"这两种完全不同的情况：
@@ -952,7 +958,7 @@ namespace AutoHorseRace.Utils
 
             if (_isUseServer)
             {
-                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime);
+                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime, RequestTimeoutSeconds);
                 _logger.Debug($"deleteAll result: {result}");
             }
             else
@@ -1000,7 +1006,7 @@ namespace AutoHorseRace.Utils
 
             if (_isUseServer)
             {
-                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime);
+                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime, RequestTimeoutSeconds);
                 _logger.Debug($"queryTodayRacesInfo result: {result}");
             }
             else
@@ -1051,7 +1057,7 @@ namespace AutoHorseRace.Utils
 
             if (_isUseServer)
             {
-                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime);
+                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime, RequestTimeoutSeconds);
                 _logger.Debug($"queryAllRaceInfo result: {result}");
             }
             else
@@ -1100,7 +1106,7 @@ namespace AutoHorseRace.Utils
 
             if (_isUseServer)
             {
-                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime);
+                result = HTTPUtils.SendSyncRequest(url, "POST", null, null, payload, out serverProcessTime, RequestTimeoutSeconds);
                 _logger.Debug($"queryRaceInfo result: {result}");
             }
             else

@@ -105,7 +105,7 @@ namespace AutoHorseRace
         public bool AutoDeletePendingOrder = false;
 
         /// <summary>
-        /// 自动下吃注
+        /// 自动强制平仓,默认false,表示不自动平仓
         /// </summary>
         public bool AutoClosePosition = false;
 
@@ -195,6 +195,15 @@ namespace AutoHorseRace
         /// QP允许的下注马位,1-2,1-3,1-5
         /// </summary>
         public string QPCombos = string.Empty;
+        /// <summary>
+        /// 不允许下注的组合
+        /// </summary>
+        public string QExcludeCombos = string.Empty;
+        /// <summary>
+        /// 不允许下注的组合
+        /// </summary>
+        public string QPExcludeCombos = string.Empty;
+
         /// <summary>
         /// Q满足下注条件但是票数小于该值时就降低一个水位下注
         /// </summary>

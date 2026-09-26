@@ -973,13 +973,17 @@ namespace uClient.Broker
         }
 
         /// <summary>
-        /// 持仓管理核心逻辑（Money-Risk V7.1）。
+        /// 持仓管理核心逻辑（Price-Distance V7.2）。
         ///
-        /// keepProfitMoneyPerLot = TP1金额（USD / lot）
-        /// stopLossMoneyPerLot = 1R金额（USD / lot）
-        /// goldUsdPerLotPerPrice = XAUUSD每1 lot、价格移动1.00对应USD
+        /// keepProfitDistance = TP1价格距离
+        /// stopLossDistance = 1R价格距离
+        ///
+        /// 所有TP/SL/R/MFE/MAE判断均使用价格距离。
+        /// Lot size / USD P&L 不参与平仓条件。
         ///
         /// 本方法不修改Broker SL，只产生策略层平仓信号。
+        ///
+        /// 第8参数仅为兼容旧调用方，当前版本忽略。
         /// </summary>
         public static List<TradeSignal> ManagePositionSignal(
             TradePosition pos,
@@ -987,50 +991,60 @@ namespace uClient.Broker
             decimal atr,
             decimal ema,
             string strategyResult,
-            decimal keepProfitMoneyPerLot,
-            decimal stopLossMoneyPerLot,
-            decimal goldUsdPerLotPerPrice = 100m)
+            decimal keepProfitDistance,
+            decimal stopLossDistance,
+            decimal unusedCompatibilityParameter = 0m)
         {
             var signals = new List<TradeSignal>();
 
             if (pos == null || price <= 0)
                 return signals;
 
-            if (goldUsdPerLotPerPrice <= 0)
-                goldUsdPerLotPerPrice = 100m;
-            if (keepProfitMoneyPerLot <= 0)
-                keepProfitMoneyPerLot = 20m;
-            if (stopLossMoneyPerLot <= 0)
-                stopLossMoneyPerLot = 30m;
+            if (keepProfitDistance <= 0)
+                keepProfitDistance = 20m;
+
+            if (stopLossDistance <= 0)
+                stopLossDistance = 30m;
 
             bool atrReady = atr > 0;
             bool emaReady = ema > 0;
 
-            // 1. 更新MFE轨迹；只记录价格，不移动Broker SL。
+            // ========================================================
+            // 1. 统一内部风险状态
+            // ========================================================
+            // 当前版本stopLoss就是“价格距离”，不做USD转换。
+            decimal expectedStopLoss = pos.IsBuy
+                ? pos.EntryPrice - stopLossDistance
+                : pos.EntryPrice + stopLossDistance;
+
+            pos.RiskR = stopLossDistance;
+            pos.InitialStopLoss = expectedStopLoss;
+            pos.StopLoss = expectedStopLoss;
+
+            // 本版本不使用BreakEven / Trailing。
+            pos.BreakEvenActivated = false;
+
+            // ========================================================
+            // 2. 更新MFE轨迹
+            // ========================================================
             if (pos.IsBuy)
                 pos.HighestPrice = Math.Max(pos.HighestPrice, price);
             else
                 pos.LowestPrice = Math.Min(pos.LowestPrice, price);
 
-            // 2. 当前价格盈利 → USD/lot
-            decimal profitPrice = pos.IsBuy
+            // ========================================================
+            // 3. 当前盈利价格距离 / R
+            // ========================================================
+            decimal profitDistance = pos.IsBuy
                 ? price - pos.EntryPrice
                 : pos.EntryPrice - price;
 
-            decimal profitMoneyPerLot =
-                profitPrice * goldUsdPerLotPerPrice;
-
-            decimal currentR = stopLossMoneyPerLot > 0
-                ? profitMoneyPerLot / stopLossMoneyPerLot
-                : 0m;
-
-            // 3. 策略止损：以stopLoss金额为1R。
-            decimal stopDistance =
-                stopLossMoneyPerLot / goldUsdPerLotPerPrice;
-
+            // ========================================================
+            // 4. 初始止损：直接比较价格距离
+            // ========================================================
             bool stopLossHit = pos.IsBuy
-                ? price <= pos.EntryPrice - stopDistance
-                : price >= pos.EntryPrice + stopDistance;
+                ? price <= pos.EntryPrice - stopLossDistance
+                : price >= pos.EntryPrice + stopLossDistance;
 
             if (stopLossHit)
             {
@@ -1038,30 +1052,42 @@ namespace uClient.Broker
                 return signals;
             }
 
-            // 4. TP1：keepProfit直接定义为USD/lot目标。
-            if (!pos.TP1Hit && profitMoneyPerLot >= keepProfitMoneyPerLot)
+            // ========================================================
+            // 5. TP1：keepProfit价格距离
+            // ========================================================
+            if (!pos.TP1Hit &&
+                profitDistance >= keepProfitDistance)
             {
                 pos.TP1Hit = true;
                 signals.Add(TradeSignal.TakeProfit1);
                 return signals;
             }
 
-            // 5. TP2：1.80R；同时允许TP1完成后的明显回撤提前第二批平仓。
+            // ========================================================
+            // 6. TP2：1.80R
+            //    + TP1完成后，达到1.20R且回撤>=0.80ATR时允许提前TP2
+            // ========================================================
             if (pos.TP1Hit && !pos.TP2Hit)
             {
                 decimal pullback = pos.IsBuy
                     ? Math.Max(0m, pos.HighestPrice - price)
                     : Math.Max(0m, price - pos.LowestPrice);
 
-                decimal pullbackAtr = atrReady ? pullback / atr : 0m;
+                decimal pullbackAtr =
+                    atrReady ? pullback / atr : 0m;
 
-                decimal tp2MoneyPerLot = stopLossMoneyPerLot * 1.80m;
-                decimal pullbackMinMoneyPerLot = stopLossMoneyPerLot * 1.20m;
+                decimal tp2Distance =
+                    stopLossDistance * 1.80m;
 
-                bool normalTP2 = profitMoneyPerLot >= tp2MoneyPerLot;
+                decimal pullbackMinDistance =
+                    stopLossDistance * 1.20m;
+
+                bool normalTP2 =
+                    profitDistance >= tp2Distance;
+
                 bool pullbackTP2 =
                     atrReady &&
-                    profitMoneyPerLot >= pullbackMinMoneyPerLot &&
+                    profitDistance >= pullbackMinDistance &&
                     pullbackAtr >= 0.80m;
 
                 if (normalTP2 || pullbackTP2)
@@ -1072,13 +1098,24 @@ namespace uClient.Broker
                 }
             }
 
-            // 6. EMA趋势反转退出。
+            // ========================================================
+            // 7. EMA趋势反转退出
+            // ========================================================
             if (emaReady && atrReady)
             {
                 decimal emaBuffer = atr * 0.20m;
+
                 bool oppositeTrend = pos.IsBuy
-                    ? string.Equals(strategyResult, "SELL TREND", StringComparison.OrdinalIgnoreCase) && price < ema - emaBuffer
-                    : string.Equals(strategyResult, "BUY TREND", StringComparison.OrdinalIgnoreCase) && price > ema + emaBuffer;
+                    ? string.Equals(
+                        strategyResult,
+                        "SELL TREND",
+                        StringComparison.OrdinalIgnoreCase) &&
+                      price < ema - emaBuffer
+                    : string.Equals(
+                        strategyResult,
+                        "BUY TREND",
+                        StringComparison.OrdinalIgnoreCase) &&
+                      price > ema + emaBuffer;
 
                 if (oppositeTrend)
                     pos.OppositeSignalCount++;
@@ -1089,32 +1126,15 @@ namespace uClient.Broker
                     ? Math.Max(0m, pos.HighestPrice - price)
                     : Math.Max(0m, price - pos.LowestPrice);
 
-                if (pos.OppositeSignalCount >= 2 && pullback > atr)
+                if (pos.OppositeSignalCount >= 2 &&
+                    pullback > atr)
+                {
                     signals.Add(TradeSignal.ExitByEMA);
+                    return signals;
+                }
             }
 
             return signals;
-        }
-
-        /// <summary>
-        /// 兼容旧调用方。默认使用20 USD/lot TP1、30 USD/lot 1R、100 USD/lot/1.00价格。
-        /// </summary>
-        public static List<TradeSignal> ManagePositionSignal(
-            TradePosition pos,
-            decimal price,
-            decimal atr,
-            decimal ema,
-            string strategyResult)
-        {
-            return ManagePositionSignal(
-                pos,
-                price,
-                atr,
-                ema,
-                strategyResult,
-                20m,
-                30m,
-                100m);
         }
 
         /// <summary>

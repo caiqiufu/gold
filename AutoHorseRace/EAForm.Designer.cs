@@ -417,7 +417,7 @@
             // 
             // buttonTradeRecords
             // 
-            buttonTradeRecords.Location = new Point(549, 2);
+            buttonTradeRecords.Location = new Point(650, 2);
             buttonTradeRecords.Name = "buttonTradeRecords";
             buttonTradeRecords.Size = new Size(81, 28);
             buttonTradeRecords.TabIndex = 62;
@@ -437,7 +437,7 @@
             // button1
             // 
             button1.Font = new Font("Microsoft YaHei", 10.5F);
-            button1.Location = new Point(753, 9);
+            button1.Location = new Point(753, 4);
             button1.Name = "button1";
             button1.Size = new Size(80, 28);
             button1.TabIndex = 36;
@@ -651,7 +651,7 @@
             // 
             numericUpDownAutoTradeEndTimeDuration.Location = new Point(229, 21);
             numericUpDownAutoTradeEndTimeDuration.Maximum = new decimal(new int[] { 300, 0, 0, 0 });
-            numericUpDownAutoTradeEndTimeDuration.Minimum = new decimal(new int[] { 30, 0, 0, 0 });
+            numericUpDownAutoTradeEndTimeDuration.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
             numericUpDownAutoTradeEndTimeDuration.Name = "numericUpDownAutoTradeEndTimeDuration";
             numericUpDownAutoTradeEndTimeDuration.Size = new Size(52, 26);
             numericUpDownAutoTradeEndTimeDuration.TabIndex = 59;

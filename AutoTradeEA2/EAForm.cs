@@ -2681,7 +2681,7 @@ namespace uClient.Broker
             _StrategyConfig.CurrentOrderDetail = "CLOSE_BUY";
             _StrategyConfig.GOLD_PRICE = 0;
             _StrategyConfig.SILVER_PRICE = 0;
-            _StrategyConfig.dynamicLost = 0;
+            _StrategyConfig.dynamicLost = _StrategyConfig.stopLoss;
             _StrategyConfig.gsMaxProfitValue = 0;
             _StrategyConfig.gsMaxLossValue = 0;
 

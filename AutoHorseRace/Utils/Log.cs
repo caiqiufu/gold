@@ -309,10 +309,19 @@ namespace AutoHorseRace
                     accountCode = "999999";
                 }
                 string msgt = DateTime.Now.ToString("HH:mm:ss") + " " + msg;
-                _LstTradeRecord.TopIndex = _LstTradeRecord.Items.Count - 1;
-                _LstTradeRecord.Items.Add(msgt);
+                // 🔧 最新数据显示在第一行：改为 Insert(0, ...) 而不是 Add(...)，
+                // 每次都把最新一条插到列表最前面，旧数据依次往后顺延一位。
+                _LstTradeRecord.Items.Insert(0, msgt);
+                // 插到顶部后把 TopIndex 设为 0，确保列表自动滚动回顶部，
+                // 不然如果用户之前把滚动条拖到别的位置，新插入的这条不会自动进入可视区域。
+                _LstTradeRecord.TopIndex = 0;
                 AddTradeMsg(msgt, accountCode);
                 _logger.Info(msgt);
+                // 🔧 超过 50 条时裁剪最旧的一条：现在最新数据在索引 0，最旧的一条自然就在
+                // 末尾（Items.Count - 1），删除末尾这行代码不用改就正好符合预期了。
+                // （原来的写法是先 Add 到末尾、再删 Count-1，那其实删的是刚加进去的这一条
+                // 本身——新数据一进来超过50条就被立刻删掉，是原逻辑里一个既有 bug，
+                // 改成 Insert(0, ...) 之后顺带修正了。）
                 if (_LstTradeRecord.Items.Count > 50)
                 {
                     _LstTradeRecord.Items.RemoveAt(_LstTradeRecord.Items.Count - 1);

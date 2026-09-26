@@ -102,9 +102,9 @@ namespace AutoHorseRace
             _timerRefreshBetInfo = new RandomTaskTimer(
                 "业务C_盘口信息",
                 async () => await QueryEATBETInfoDataAsync(),
-                baseDelaySeconds: 1,
+                baseDelaySeconds: 3,
                 randomMinSeconds: 1,
-                randomMaxSeconds: 3
+                randomMaxSeconds: 10
             );
             // 🔧 强平轮询：不在方法内部写循环等待成交，而是靠这个定时器每隔约 5 秒（固定 5 秒 + 0~2 秒随机抖动，
             // 避免多个客户端固定 5 秒整数倍撞车）重新调用一次 QueryEATBETInfoDataForClosePositionAsync，
@@ -209,13 +209,33 @@ namespace AutoHorseRace
         private TradeRecordWriter _tradeRecordWriter;
 
         /// <summary>
-        /// 保护 _tradeRecordWriter 整体替换（Stop+重新创建）与并发 Enqueue 之间的竞态：
-        /// AutoToNextRace() 转场时会先 Stop() 排干旧队列、再 new 一个新的 TradeRecordWriter，
-        /// 如果这期间恰好有其它线程（ExecuteTrade / RefreshTradeListToDB）正在调用 Enqueue，
-        /// 旧队列的 Channel 已经 Complete()，会直接抛 ChannelClosedException，导致这笔落库请求
-        /// 静默丢失（不会重试，也不会有死信日志）。所有对 _tradeRecordWriter 的读/写（Enqueue、
-        /// Stop+重建）统一经过这把锁，把"排干旧队列+切换到新队列"做成一个不可被 Enqueue 打断的
-        /// 原子操作，Enqueue 侧顶多是短暂等锁，不会丢数据。
+        /// 保护 _tradeRecordWriter 字段本身的读/写竞态（Enqueue 读取当前实例、
+        /// AutoToNextRace() 转场时把它替换成一个新实例）。
+        ///
+        /// 🔧 V20260919_TRADEWRITER_SWAP_NO_UI_FREEZE_FIX（"转强平/转场时卡死，是否和保存
+        /// 数据库有关"的真实根因之一）：
+        /// 原来的写法是在持有这把锁期间直接调用 _tradeRecordWriter.Stop(TimeSpan.FromSeconds(10))——
+        /// Stop() 要等所有 worker 把队列里剩下的落库任务真正写完数据库才返回，正常情况下很快，
+        /// 但只要数据库这一刻稍慢（网络抖动、行锁等待、一次性补写的记录较多等），就可能真的
+        /// 耗时数秒、逼近甚至达到 10 秒上限——这整段时间锁一直被占着不放。
+        /// 而 timerRefreshAutoBettingInfo 是一个真正跑在 UI 线程上的 System.Windows.Forms.Timer
+        /// （每 3 秒 Tick 一次，见 timerRefreshAutoBettingInfo_Tick），它的
+        /// RefreshAutoBettingInfo() -> RefreshTradeListToDB() -> EnqueueTradeWrite() 也需要
+        /// 拿同一把锁才能把待落库的记录入队。UI 线程会直接卡在这把锁上，卡多久完全取决于
+        /// 这一刻数据库落库有多慢——这正是"卡死好像跟保存数据库有关"的真实机制：不是某个
+        /// 数据库调用直接跑在了 UI 线程上，而是"数据库落库慢"通过这把被 UI 线程和后台线程
+        /// 共享的锁，把耗时间接转嫁给了 UI 线程。AutoToNextRace() 常常发生在强平窗口刚结束、
+        /// 紧接着自动转场的时间点附近，恰好是落库压力（把上一场最后一批成交批量补写）最大的
+        /// 时刻，所以最容易在"转强平/转场"前后被用户感知为"卡死"。
+        ///
+        /// 修复：把"排干旧队列"这个可能耗时的 Stop() 调用移出锁的范围，锁内只做一次
+        /// 几乎零耗时的指针替换（取出旧引用 + new 一个新实例 + 赋值给 _tradeRecordWriter）。
+        /// 排干旧队列的 Stop() 在锁外执行——此时 _tradeRecordWriter 字段已经指向新实例，
+        /// 所有 Enqueue 调用（包括 UI 线程的 EnqueueTradeWrite）都是通过这个字段间接读取，
+        /// 从不缓存旧引用，因此指针替换之后不会再有任何线程对正在排干的旧实例发起新的
+        /// Enqueue，不会重现旧注释里提到的 ChannelClosedException / 落库请求静默丢失问题；
+        /// 同时任何线程（含 UI 线程）顶多在锁上等待"取引用+new+赋值"这几行代码的执行时间
+        /// （可忽略不计），不会再被数据库的实际写入速度拖慢。
         /// </summary>
         private readonly object _tradeRecordWriterLock = new object();
 
@@ -240,9 +260,12 @@ namespace AutoHorseRace
         }
 
         /// <summary>
-        /// 所有落库 Enqueue 的统一入口：加锁只是为了跟 AutoToNextRace() 里
-        /// "Stop 旧队列 + 创建新队列" 那一小段互斥，锁内只做一次 Enqueue（纯内存操作，
-        /// 几乎不耗时），不会造成明显阻塞；转场时最多让 Enqueue 侧等待到新队列创建完毕。
+        /// 所有落库 Enqueue 的统一入口：加锁只是为了跟 AutoToNextRace() 里对
+        /// _tradeRecordWriter 字段的指针替换互斥，锁内只做一次读引用 + Enqueue（均为纯内存
+        /// 操作，几乎不耗时）。V20260919_TRADEWRITER_SWAP_NO_UI_FREEZE_FIX 之后，
+        /// AutoToNextRace() 排干旧队列的耗时 Stop() 已经挪到锁外执行，这里顶多等待一次
+        /// 指针替换的时间，不会再因为数据库落库慢被拖住——这一点对 timerRefreshAutoBettingInfo
+        /// 这个跑在 UI 线程上的定时器尤其重要，否则数据库慢会直接表现为界面卡死。
         /// </summary>
         private void EnqueueTradeWrite(TradeWriteJob job)
         {
@@ -1160,6 +1183,83 @@ namespace AutoHorseRace
         }
 
         /// <summary>
+        /// 转场（AutoToNextRace）清空上一场 TradeStateStore 之前，把这一场里"未完全平仓"
+        /// （赌/吃两边已执行金额不相等，或者赌/吃任一侧还有未清理干净的挂单余量）的组合记录
+        /// 下来，写入 _Config.QExcludeCombos / _Config.QPExcludeCombos——这是一个独立于
+        /// QCombos/QPCombos 白名单的"排除名单"字段，下一场 AutoBetting 会在白名单过滤之后
+        /// 再叠加一层排除过滤（见 AutoBetting 里 V20260919_EXCLUDE_UNCLOSED_COMBOS 的改动），
+        /// 命中排除名单的组合赌、吃两侧都直接跳过，避免带着上一场没平干净的残留敞口继续在
+        /// 同一个组合上加仓、把风险越滚越大。
+        ///
+        /// 只在转场时调用一次；此时 AutoToNextRace() 已经先 RefreshMyTradeSnapshot() +
+        /// RefreshTradeListToDB() 同步过一轮，读到的是清空前最后一份权威快照。
+        ///
+        /// 🔧 V20260919_EXCLUDE_LIST_PER_RACE_ONLY：排除名单**不跨场次累加**——每次转场都会
+        /// 用"刚结束的这一场"的未平仓组合整体覆盖 QExcludeCombos/QPExcludeCombos（而不是合并
+        /// 追加），只用来提醒紧接着的下一场；这一场如果没有任何未平仓组合，就把上一次转场
+        /// 留下的旧内容一并清空，不会因为好几场之前遗留的某个组合被永久排除在外。
+        ///
+        /// ⚠️ 依赖 _Config（Config 类，定义在本文件之外）新增两个 string 属性
+        /// QExcludeCombos / QPExcludeCombos，否则本方法无法编译通过——它们只是普通的
+        /// 逗号分隔文本字段，跟 QCombos/QPCombos 是同一种存储方式，会随 SaveConfig() 里
+        /// 整个 _Config 对象一起序列化进 Config.json，不需要额外接线。
+        /// </summary>
+        private void RecordUnclosedCombosBeforeClearRace()
+        {
+            var statesThisRace = _Config.TradeStateStore.GetAll()
+                .Where(s => string.Equals(s.RaceNo, _Config.CurrentRaceNo))
+                .ToList();
+
+            // 未完全平仓的判定：
+            // 1) 赌/吃两侧已执行金额不相等（Math.Abs(BetExecuted - EatExecuted) > AmountEpsilon）——
+            //    说明这个组合的对冲没有做平，留有净敞口；
+            // 2) 或者赌/吃任一侧还有未清理干净的挂单余量（EffectiveBetPending/EffectiveEatPending）——
+            //    正常情况下走到转场这一步（已经过了强平窗口）这些应该都已经被强平通道处理掉，
+            //    如果还有残留，说明强平也没能把它处理干净，更需要被排除、避免下一场继续加仓。
+            // 完全没发生过任何交易的组合（赌/吃执行、挂单全是 0）不算"未平仓"，跳过。
+            bool IsUnclosed(ComboTradeState s)
+            {
+                bool hasAnyActivity = s.BetExecuted > AmountEpsilon || s.EatExecuted > AmountEpsilon
+                    || s.EffectiveBetPending > AmountEpsilon || s.EffectiveEatPending > AmountEpsilon;
+                if (!hasAnyActivity) return false;
+                bool executedMismatch = Math.Abs(s.BetExecuted - s.EatExecuted) > AmountEpsilon;
+                bool stillPending = s.EffectiveBetPending > AmountEpsilon || s.EffectiveEatPending > AmountEpsilon;
+                return executedMismatch || stillPending;
+            }
+
+            var unclosedQ = statesThisRace.Where(s => string.Equals(s.Type, "Q") && IsUnclosed(s)).ToList();
+            var unclosedQP = statesThisRace.Where(s => string.Equals(s.Type, "QP") && IsUnclosed(s)).ToList();
+
+            // 🔧 直接整体覆盖，而不是合并追加——Q 侧 ComboTradeState.Combo 本身就是不带括号的
+            // 裸格式（例如 "1-2"），跟 QCombos/QExcludeCombos 的书写格式一致，直接用；
+            // QP 侧 ComboTradeState.Combo 存的是市场数据原样格式、带括号（例如 "(4-8)"），
+            // 但 QPCombos/QPExcludeCombos 这两个配置字段延续既有约定，统一用不带括号的裸格式
+            // 书写（跟 QCombos 保持一致的书写习惯），AutoBetting 里排除过滤时再按 QPCombos
+            // 现有的做法加回括号去比对，所以这里落库前先去掉括号。
+            _Config.QExcludeCombos = unclosedQ.Count > 0 ? string.Join(",", unclosedQ.Select(s => s.Combo)) : string.Empty;
+            _Config.QPExcludeCombos = unclosedQP.Count > 0 ? string.Join(",", unclosedQP.Select(s => s.Combo.Trim('(', ')', ' '))) : string.Empty;
+
+            if (unclosedQ.Count > 0)
+            {
+                _Log.LogInfo($"[转场排除][Q] 本场[{_Config.CurrentRaceNo}]检测到[{unclosedQ.Count}]个未完全平仓组合，" +
+                             $"QExcludeCombos 已整体覆盖为: [{string.Join(", ", unclosedQ.Select(s => $"{s.Combo}(赌{s.BetExecuted:F0}/吃{s.EatExecuted:F0}/赌挂{s.EffectiveBetPending:F0}/吃挂{s.EffectiveEatPending:F0})"))}]，仅对下一场生效。");
+            }
+            else
+            {
+                _Log.LogInfo($"[转场排除][Q] 本场[{_Config.CurrentRaceNo}]没有未完全平仓的组合，QExcludeCombos 已清空。");
+            }
+            if (unclosedQP.Count > 0)
+            {
+                _Log.LogInfo($"[转场排除][QP] 本场[{_Config.CurrentRaceNo}]检测到[{unclosedQP.Count}]个未完全平仓组合，" +
+                             $"QPExcludeCombos 已整体覆盖为: [{string.Join(", ", unclosedQP.Select(s => $"{s.Combo}(赌{s.BetExecuted:F0}/吃{s.EatExecuted:F0}/赌挂{s.EffectiveBetPending:F0}/吃挂{s.EffectiveEatPending:F0})"))}]，仅对下一场生效。");
+            }
+            else
+            {
+                _Log.LogInfo($"[转场排除][QP] 本场[{_Config.CurrentRaceNo}]没有未完全平仓的组合，QPExcludeCombos 已清空。");
+            }
+        }
+
+        /// <summary>
         /// 🆕 把 textBoxDSAccountCode/Password/Pin 三个文本框 + serverAddressText（即
         /// _Config.DSServerAddress，只在 Config.json 里维护，不经界面输入）的逗号分隔内容，
         /// 按下标一一对应解析成多个 Account，每个账户各自的 BrokerServer 来自
@@ -1854,7 +1954,7 @@ namespace AutoHorseRace
         /// <summary>
         /// 自动下注处理
         /// </summary>
-        public void AutoBetProcess(List<BetInfo> EATBetInfos, string type, string targetCombo = null)
+        public void AutoBetProcess(List<BetInfo> EATBetInfos, List<BetInfo> BETBetInfos, string type, string targetCombo = null)
         {
             if (EATBetInfos == null || EATBetInfos.Count == 0 || string.IsNullOrEmpty(targetCombo)) return;
             if (!TryGetTradeTimeContext(out _, out _, out DateTime triggerEndTime) || DateTime.Now >= triggerEndTime)
@@ -1893,7 +1993,19 @@ namespace AutoHorseRace
                     {
                         bool isOddsValid = bestInCurrentBatch.odds >= configEndOdds && bestInCurrentBatch.odds <= configStartOdds;
                         bool isHeatValid = bestInCurrentBatch.limit >= configMinLimit;
-                        if (isOddsValid && isHeatValid)
+                        // 🔧 新增校验：EATBetInfos（对手盘"吃"方向报价）里有这个 combo，不代表这个 combo
+                        // 在"赌"方向（BETBetInfos）也真的有行情/可下注——如果 BETBetInfos 里根本找不到
+                        // 这个 combo，很可能意味着该组合当前暂停交易、或者两份市场数据这一轮没能同步齐，
+                        // 此时贸然按 EAT 侧价格去下 BET 单风险较大，应该跳过，等下一轮数据一致时再判断。
+                        //
+                        // 🆕 V20260923_BETMARKET_AMOUNT_CHECK：光"存在这个 combo"还不够——如果
+                        // BETBetInfos 里这个 combo 对应的挂单余量 amount 小于（或等于）本次准备下的
+                        // 赌注金额 configStakeAmount，说明对手盘剩余可承接的额度不够我方这一注，
+                        // 贸然下单大概率会被服务器拒绝或者只能部分成交，因此要求匹配到的这一条至少有
+                        // 一笔 amount 严格大于 configStakeAmount 才视为"该组合当前真的可下注"。
+                        bool isComboActiveInBetMarket = BETBetInfos != null
+                            && BETBetInfos.Any(b => string.Equals(b.combo, targetCombo) && b.amount > configStakeAmount);
+                        if (isOddsValid && isHeatValid && isComboActiveInBetMarket)
                         {
                             _logger.Debug($"🔥 触发下注！组合: {bestInCurrentBatch.combo} | 水折: {bestInCurrentBatch.odds}% | 限额: {bestInCurrentBatch.limit}");
                             // 🔧 不再直接修改 bestInCurrentBatch（它是 eatList 里的共享对象，
@@ -1910,6 +2022,20 @@ namespace AutoHorseRace
                                 stakeAmount = configStakeAmount
                             };
                             MatchedList.Add(newEatInfo);
+                        }
+                        else if (isOddsValid && isHeatValid && !isComboActiveInBetMarket)
+                        {
+                            // 🔧 这条日志现在覆盖两种情况：BETBetInfos 里完全找不到这个 combo；
+                            // 或者找到了但挂单余量 amount 都不大于本次要下的 configStakeAmount。
+                            // 把 BETBetInfos 里该 combo 当前实际的 amount 列表也打出来，方便区分
+                            // 到底是"完全没报价"还是"报价额度不够"。
+                            var matchedButAmountInsufficient = (BETBetInfos ?? new List<BetInfo>())
+                                .Where(b => string.Equals(b.combo, targetCombo)).Select(b => b.amount).ToList();
+                            _logger.Debug($"[{type}][{targetCombo}] 水折/限额均满足，但该组合在 BETBetInfos（赌方向市场数据）中" +
+                                          (matchedButAmountInsufficient.Count > 0
+                                              ? $"挂单余量不足（现有 amount=[{string.Join(", ", matchedButAmountInsufficient)}]，需要 > configStakeAmount={configStakeAmount}）"
+                                              : "不存在") +
+                                          $"，跳过本轮下注。");
                         }
                     }
                     if (MatchedList.Count > 0)
@@ -2539,6 +2665,23 @@ namespace AutoHorseRace
                     var filteredEatGroups = allowedQCombos == null
                         ? eatGroups
                         : eatGroups.Where(g => allowedQCombos.Contains(g.Key)).ToDictionary(g => g.Key, g => g.Value);
+                    // 🆕 V20260919_EXCLUDE_UNCLOSED_COMBOS：在白名单过滤之后，再叠加一层"排除名单"
+                    // 过滤——QExcludeCombos 由 AutoToNextRace() 转场时自动写入，记录的是上一场
+                    // "赌/吃两边没能完全对平"的组合（残留敞口）。这里命中排除名单的组合直接从本轮
+                    // filteredEatGroups 里去掉，AutoBetProcess/AutoEatProcess 两侧都不会再处理它，
+                    // 避免在同一个还没平干净的组合上继续加仓。QExcludeCombos 是独立于 QCombos 白名单
+                    // 的字段，不影响 QCombos 原有的语义。
+                    var excludedQCombos = Utils.Utils.GetAllowedSet(_Config.QExcludeCombos);
+                    if (excludedQCombos != null && excludedQCombos.Count > 0)
+                    {
+                        int beforeExcludeCount = filteredEatGroups.Count;
+                        filteredEatGroups = filteredEatGroups.Where(g => !excludedQCombos.Contains(g.Key)).ToDictionary(g => g.Key, g => g.Value);
+                        int excludedHitCount = beforeExcludeCount - filteredEatGroups.Count;
+                        if (excludedHitCount > 0)
+                        {
+                            _Log.LogInfo($"[Q][排除名单] 本轮命中排除名单，跳过[{excludedHitCount}]个上一场未平干净的遗留组合。当前排除名单: [{string.Join(", ", excludedQCombos)}]");
+                        }
+                    }
                     // 4. 并行遍历过滤后的字典
                     // V20260918_CODE_REVIEW_FIXES(7)：加上 MaxDegreeOfParallelism 上限。
                     Parallel.ForEach(filteredEatGroups, new ParallelOptions { MaxDegreeOfParallelism = MaxComboParallelism }, kvp =>
@@ -2548,7 +2691,7 @@ namespace AutoHorseRace
                         // 直接判断列表不为空即可执行
                         if (eatList != null && eatList.Count > 0)
                         {
-                            AutoBetProcess(eatList, "Q", comboKey);
+                            AutoBetProcess(eatList, Q_BETBetInfos, "Q", comboKey);
                             AutoEatProcess(eatList, "Q", comboKey);
                         }
                     });
@@ -2585,6 +2728,23 @@ namespace AutoHorseRace
                     var filteredEatGroups = allowedQPCombos == null
                         ? eatGroups
                         : eatGroups.Where(g => allowedQPCombos.Contains(g.Key)).ToDictionary(g => g.Key, g => g.Value);
+                    // 🆕 V20260919_EXCLUDE_UNCLOSED_COMBOS：同 Q 侧，白名单过滤之后再叠加一层
+                    // "排除名单"过滤。QPExcludeCombos 延续 QPCombos 既有的书写约定，存的是不带括号的
+                    // 裸格式（如 "4-8"），这里同样按加括号后再比对（QP 实际 combo 字段带括号，如 "(4-8)"）。
+                    var rawExcludedQPCombos = Utils.Utils.GetAllowedSet(_Config.QPExcludeCombos);
+                    HashSet<string> excludedQPCombos = rawExcludedQPCombos == null
+                        ? null
+                        : new HashSet<string>(rawExcludedQPCombos.Select(c => $"({c})"));
+                    if (excludedQPCombos != null && excludedQPCombos.Count > 0)
+                    {
+                        int beforeExcludeCount = filteredEatGroups.Count;
+                        filteredEatGroups = filteredEatGroups.Where(g => !excludedQPCombos.Contains(g.Key)).ToDictionary(g => g.Key, g => g.Value);
+                        int excludedHitCount = beforeExcludeCount - filteredEatGroups.Count;
+                        if (excludedHitCount > 0)
+                        {
+                            _Log.LogInfo($"[QP][排除名单] 本轮命中排除名单，跳过[{excludedHitCount}]个上一场未平干净的遗留组合。当前排除名单: [{string.Join(", ", excludedQPCombos)}]");
+                        }
+                    }
                     // 4. 并行遍历过滤后的字典
                     // V20260918_CODE_REVIEW_FIXES(7)：加上 MaxDegreeOfParallelism 上限。
                     Parallel.ForEach(filteredEatGroups, new ParallelOptions { MaxDegreeOfParallelism = MaxComboParallelism }, kvp =>
@@ -2594,7 +2754,7 @@ namespace AutoHorseRace
                         // 直接判断列表不为空即可执行
                         if (eatList != null && eatList.Count > 0)
                         {
-                            AutoBetProcess(eatList, "QP", comboKey);
+                            AutoBetProcess(eatList, QP_BETBetInfos, "QP", comboKey);
                             AutoEatProcess(eatList, "QP", comboKey);
                         }
                     });
@@ -2668,7 +2828,7 @@ namespace AutoHorseRace
                 // V20260913_CLOSE_WINDOW_EXTEND：强平窗口已延长到开赛后 30 秒（见 TryGetTradeTimeContextForClose
                 // 的 closeEndTime），这里判断"是否需要检查/启动强平定时器"的右边界也要跟着放宽到
                 // raceDateTime.AddSeconds(30)，否则开赛后到强平窗口真正结束这段时间会漏检。
-                else if (now >= triggerEndTime && now < raceDateTime.AddSeconds(30))
+                else if (now >= triggerEndTime && now < raceDateTime)
                 {
                     CheckAndStartClosePosition(now);
                 }
@@ -3153,7 +3313,18 @@ namespace AutoHorseRace
             SaveConfig();
             _Log.LogInfo("信息保存成功");
         }
-        private void comboBoxRaceType_SelectedIndexChanged(object sender, EventArgs e)
+        // 🔧 V20260919_RACETYPE_CHANGED_UI_FREEZE_FIX：同一类"服务端响应延迟直接卡死界面"的问题——
+        // 切换赛场类型下拉框（comboBoxRaceType）会同步触发这个事件，原来里面直接调用
+        // QueryAndApplyRaceInfo() 在 UI 线程上同步跑 HTTPHelper.queryAllRaceInfo(...)（失败时
+        // 还会退回去同步跑 DBHelper.getSysConfig()）。这个事件不光在用户手动切换赛场类型时
+        // 触发，IniUI() 启动阶段设置 comboBoxRaceType.SelectedItem 时也会自动触发一次——
+        // 如果那一刻服务端/数据库响应慢，程序刚启动界面就会先卡一下，跟自动转场是同一种成因：
+        // 网络/数据库耗时被直接算在了 UI 线程头上。
+        // 修复：事件处理改成 async void，实际查询逻辑改成 async Task，
+        // 把 HTTPHelper.queryAllRaceInfo / DBHelper.getSysConfig 都丢进 Task.Run 在线程池执行，
+        // await 之后 WinForms 的 SynchronizationContext 会自动把后续代码切回 UI 线程，
+        // 中间等待网络/数据库返回的这段时间 UI 线程可以正常处理消息、不会卡死。
+        private async void comboBoxRaceType_SelectedIndexChanged(object sender, EventArgs e)
         {
             _Config.CurrentRaceTypeDesc = comboBoxRaceType.SelectedItem.ToString();
             _Config.CurrentRaceType = _Config.CurrentRaceTypeDesc.Split("|")[0];
@@ -3167,7 +3338,7 @@ namespace AutoHorseRace
                     }
                 }
             }
-            QueryAndApplyRaceInfo();
+            await QueryAndApplyRaceInfoAsync();
         }
         /// <summary>
         /// 查询当前赛场（_Config.CurrentRaceType）的场次信息并据此刷新 comboBoxRaceNo/开赛时间：
@@ -3175,10 +3346,17 @@ namespace AutoHorseRace
         /// 回退到数据库配置里的 Horse.{RaceType}.RCsTime 静态时间表。
         /// 从 comboBoxRaceType_SelectedIndexChanged 里抽出来，便于后续在其它地方
         /// （比如切换赛场类型之外的场景）复用同一套刷新逻辑。
+        /// 🔧 网络/数据库调用经 Task.Run 放到线程池执行，await 之后自动回到 UI 线程，
+        /// 所以下面直接操作 comboBoxRaceNo/textBoxCurrentRaceTime 等控件的代码不需要额外 Invoke。
         /// </summary>
-        private void QueryAndApplyRaceInfo()
+        private async Task QueryAndApplyRaceInfoAsync()
         {
-            JObject raceInfoResult = HTTPHelper.queryAllRaceInfo(_Config.EAServerAddress, _EAAccount.UserCode, _Config.CurrentRaceDate, _Config.CurrentRaceType, _Config.CurrentRaceNo);
+            string eaServerAddress = _Config.EAServerAddress;
+            string userCode = _EAAccount.UserCode;
+            string raceDate = _Config.CurrentRaceDate;
+            string raceType = _Config.CurrentRaceType;
+            string raceNo = _Config.CurrentRaceNo;
+            JObject raceInfoResult = await Task.Run(() => HTTPHelper.queryAllRaceInfo(eaServerAddress, userCode, raceDate, raceType, raceNo));
             if (raceInfoResult != null && (bool)raceInfoResult["success"])
             {
                 _Log.LogInfo($"[性能监控][comboBoxRaceType][queryRaceInfo] 后端服务耗时: {raceInfoResult["serverProcessTime"]}");
@@ -3215,8 +3393,9 @@ namespace AutoHorseRace
             {
                 if (_Config != null)
                 {
-                    //获取数据库配置数据
-                    _Config.SysConfig = DBHelper.getSysConfig();
+                    // 🔧 DBHelper.getSysConfig() 是一次数据库查询，同样可能耗时，
+                    // 一并丢进线程池，避免退回静态时间表这个兜底分支时又在 UI 线程卡一次。
+                    _Config.SysConfig = await Task.Run(() => DBHelper.getSysConfig());
                 }
                 string racesTimeStr = _Config.SysConfig.ContainsKey($"Horse.{_Config.CurrentRaceType}.RCsTime") ? _Config.SysConfig[$"Horse.{_Config.CurrentRaceType}.RCsTime"] : "";
                 if (!string.IsNullOrEmpty(racesTimeStr))
@@ -3405,59 +3584,96 @@ namespace AutoHorseRace
         private int _savedSameKeyMatchIndex = 0;
         /// <summary>
         /// 我的交易数据
+        ///
+        /// 🔧 V20260923_REFRESH_LISTS_TRUE_ASYNC：原来是
+        /// `Task.Run(() => { ...; this.Invoke(...) })`——额外开一个线程池线程，结果这个
+        /// 线程池线程立刻又用【阻塞式】Invoke 卡住不动，一直等 UI 线程把这个委托完整跑完
+        /// 才返回，相当于白白占用一个线程池线程去陪着 UI 线程"同步等"，并没有真正的异步
+        /// 收益，纯属多一次线程调度开销。更麻烦的是外层 Task.Run 的返回值被直接丢弃
+        /// （从不 await、没有 try/catch），一旦 Invoke 内部抛异常（比如窗体正在关闭、
+        /// 控件句柄已销毁），这个异常没人观察，会变成 UnobservedTaskException——具体表现
+        /// 因运行时版本而异，轻则异常被悄悄吞掉、你完全看不到任何日志，重则直接把整个
+        /// 进程带崩。
+        ///
+        /// 现在改为真正的异步派发：内层用 BeginInvoke（异步、不阻塞）取代 Invoke（同步、
+        /// 阻塞）——调用方把委托丢进 UI 线程的消息队列后立刻返回，不用再干等 UI 线程把它
+        /// 处理完；外层 Task.Run 仍然保留作为未来可能出现的耗时准备工作（数据库读写等）的
+        /// 扩展点。同时补上 IsDisposed/IsHandleCreated 判断和 try/catch：窗体正在关闭时
+        /// 不再尝试派发到已销毁的 UI 线程，任何异常都会被记录到日志而不是静默丢失或让
+        /// 进程崩溃。调用方签名不变（仍是 void、fire-and-forget），所有现有调用点
+        /// （包括在 lock (_autoBettingLock) 内部调用的 RefreshMyTradeSnapshot）无需改动。
         /// </summary>
         public void RefreshMyTradeList(List<BetInfo> BetInfos)
         {
-            // 🚀 核心优化：确保后台线程执行（如果有实际数据库操作可写在这里面）
             Task.Run(() =>
             {
-                // 假如有耗时的数据库操作，可以在这里处理...
-                // 比如：_repository.SaveOrUpdate(BetInfos);
-                // 2. 切回主线程刷新 UI 控件
-                this.Invoke(new Action(() =>
+                try
                 {
-                    // ==================== 1. 记忆阶段（支持重复行精准定位） ====================
-                    _savedCheckedCombinedKey = string.Empty;
-                    _savedSameKeyMatchIndex = 0;
-                    foreach (DataGridViewRow row in dataGridViewMyTradeList.Rows)
+                    // 假如未来有实际耗时的数据库/计算操作，可以在这里处理...
+                    // 比如：_repository.SaveOrUpdate(BetInfos);
+
+                    // 🔧 窗体正在关闭/已销毁时不要再往 UI 线程派发，否则 BeginInvoke 可能
+                    // 抛 ObjectDisposedException / InvalidOperationException。
+                    if (this.IsDisposed || !this.IsHandleCreated) return;
+
+                    // 🔧 BeginInvoke：把委托异步派发到 UI 线程消息队列，当前线程立即返回，
+                    // 不再阻塞等待 UI 线程执行完毕（对比原来同步阻塞的 Invoke）。
+                    this.BeginInvoke(new Action(() =>
                     {
-                        if (Convert.ToBoolean(row.Cells[0].Value) == true)
+                        try
                         {
-                            var originalItem = row.DataBoundItem as BetInfo;
-                            if (originalItem != null)
+                            // ==================== 1. 记忆阶段（支持重复行精准定位） ====================
+                            _savedCheckedCombinedKey = string.Empty;
+                            _savedSameKeyMatchIndex = 0;
+                            foreach (DataGridViewRow row in dataGridViewMyTradeList.Rows)
                             {
-                                _savedCheckedCombinedKey = originalItem.seq;
-                                for (int i = 0; i < row.Index; i++)
+                                if (Convert.ToBoolean(row.Cells[0].Value) == true)
                                 {
-                                    var prevItem = dataGridViewMyTradeList.Rows[i].DataBoundItem as BetInfo;
-                                    if (prevItem != null && prevItem.seq == _savedCheckedCombinedKey)
+                                    var originalItem = row.DataBoundItem as BetInfo;
+                                    if (originalItem != null)
                                     {
-                                        _savedSameKeyMatchIndex++;
+                                        _savedCheckedCombinedKey = originalItem.seq;
+                                        for (int i = 0; i < row.Index; i++)
+                                        {
+                                            var prevItem = dataGridViewMyTradeList.Rows[i].DataBoundItem as BetInfo;
+                                            if (prevItem != null && prevItem.seq == _savedCheckedCombinedKey)
+                                            {
+                                                _savedSameKeyMatchIndex++;
+                                            }
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                            // ==================== 2. 我的交易 列表数据刷新 ====================
+                            _MyTradeList.RaiseListChangedEvents = false;
+                            // 直接清空数据源（注意：Clear 会自动移除所有行，无需在前面单独去设 row.Cells[0].Value = false）
+                            _MyTradeList.Clear();
+                            // 如果 BetInfos 不为空或 null，则批量加载新数据
+                            if (BetInfos != null && BetInfos.Count > 0)
+                            {
+                                foreach (var item in BetInfos)
+                                {
+                                    if (item != null) //防止集合中夹杂 null 元素
+                                    {
+                                        _MyTradeList.Add(item);
                                     }
                                 }
                             }
-                            break;
+                            _MyTradeList.RaiseListChangedEvents = true;
+                            // 触发数据绑定更新，此时如果 BetInfos 为 null 或空，表格会自动变为空白
+                            _MyTradeList.ResetBindings();
                         }
-                    }
-                    // ==================== 2. 我的交易 列表数据刷新 ====================
-                    _MyTradeList.RaiseListChangedEvents = false;
-                    // 直接清空数据源（注意：Clear 会自动移除所有行，无需在前面单独去设 row.Cells[0].Value = false）
-                    _MyTradeList.Clear();
-                    // 如果 BetInfos 不为空或 null，则批量加载新数据
-                    if (BetInfos != null && BetInfos.Count > 0)
-                    {
-                        foreach (var item in BetInfos)
+                        catch (Exception ex)
                         {
-                            if (item != null) //防止集合中夹杂 null 元素
-                            {
-                                _MyTradeList.Add(item);
-                            }
+                            _logger.Error(ex, "[RefreshMyTradeList] UI 线程更新我的交易列表时异常");
                         }
-                    }
-                    _MyTradeList.RaiseListChangedEvents = true;
-                    // 触发数据绑定更新，此时如果 BetInfos 为 null 或空，表格会自动变为空白
-                    _MyTradeList.ResetBindings();
-                }));
+                    }));
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "[RefreshMyTradeList] 异步刷新我的交易列表时异常");
+                }
             });
         }
         /// <summary>/// 自动转场更新/// </summary>
@@ -3475,18 +3691,50 @@ namespace AutoHorseRace
                 RefreshMyTradeSnapshot();
                 // 2. 把最新的内存快照整体入队写库（覆盖 CONFIRMED 状态的所有成交记录）。
                 RefreshTradeListToDB();
-                // 3. 停止接收新的落库 job，并等待已入队 job 全部写完（最多等 10 秒），
-                //    确保上面第 2 步入队的 job 在清空内存字典/状态之前已经落库完成；
-                //    随后立即重新创建一个新的 TradeRecordWriter 供下一场继续使用。
-                //    整段 Stop+重建 用 _tradeRecordWriterLock 包裹，防止其它线程此时正在
-                //    Enqueue（ExecuteTrade / RefreshTradeListToDB 的下一轮定时器）撞上已经
-                //    Complete() 的旧 Channel 而抛出 ChannelClosedException 导致数据丢失。
+                // 3. 停止旧 TradeRecordWriter 接收新的落库 job，随后立即重新创建一个新的
+                //    TradeRecordWriter 供下一场继续使用。
+                //
+                //    🔧 V20260919_TRADEWRITER_SWAP_NO_UI_FREEZE_FIX（第一步修复）："转强平/
+                //    转场时卡死，是否和保存数据库有关"的根因之一：原来是在持有
+                //    _tradeRecordWriterLock 期间直接调用 Stop(10秒) 同步等待排干，如果这一刻
+                //    数据库较慢，这把锁会被实打实占用到接近 10 秒——而 timerRefreshAutoBettingInfo
+                //    （真正跑在 UI 线程上的 Timer，每 3 秒 Tick 一次）的 RefreshTradeListToDB()
+                //    -> EnqueueTradeWrite() 也需要拿同一把锁才能入队，UI 线程会直接卡在锁上。
+                //    第一步先把 Stop() 移到锁外，锁内只做一次几乎零耗时的指针替换。
+                //
+                //    🔧 V20260919_TRADEWRITER_STOP_FIRE_AND_FORGET（第二步修复，按需求明确：
+                //    "异步调用写入数据库，由于数据库记录只是日志而已，不能影响主线程执行"）：
+                //    光把 Stop() 移出锁还不够——AutoToNextRace() 本身是转场流程的关键路径，
+                //    虽然它运行在后台线程（不是 UI 线程），但它后面还有转场的其余步骤要做
+                //    （清空 TradeStateStore、切换 comboBoxRaceNo、查询下一场开赛时间等），
+                //    如果继续同步 await/阻塞等 Stop(10秒) 排干旧队列，一旦数据库慢，整个转场
+                //    流程也会被硬生生拖慢最多 10 秒。TradeRecordWriter 落库的是交易流水/日志性质
+                //    的记录，不是任何后续业务判断会去读取、也不是决定下一步动作所依赖的强一致
+                //    数据源（真正驱动决策的是内存里的 TradeStateStore），因此没有必要让转场
+                //    主流程等它写完。这里改成后台 fire-and-forget：整个"排干旧队列"过程扔进
+                //    Task.Run 异步执行，不 await、不阻塞当前线程，转场流程立即继续往下走；
+                //    旧实例已经不会再收到新 Enqueue（所有调用点都通过 _tradeRecordWriter 字段
+                //    间接访问，从不缓存旧引用），所以后台异步排干既不会丢数据，也不会让任何
+                //    主线程/关键路径等它。
+                TradeRecordWriter oldTradeRecordWriter;
                 lock (_tradeRecordWriterLock)
                 {
-                    _tradeRecordWriter?.Stop(TimeSpan.FromSeconds(10));
+                    oldTradeRecordWriter = _tradeRecordWriter;
                     _tradeRecordWriter = CreateTradeRecordWriter();
                 }
-                _Log.LogInfo("转场前服务器交易数据已全部同步到本地数据库。");
+                _ = Task.Run(() => oldTradeRecordWriter?.Stop(TimeSpan.FromSeconds(10)))
+                    .ContinueWith(t =>
+                    {
+                        if (t.Exception != null)
+                        {
+                            _logger.Error(t.Exception, "[转场] 旧 TradeRecordWriter 后台异步排干时发生异常（不影响转场主流程，仅可能导致极少数最后时刻的交易流水补写丢失，属于日志性质记录）。");
+                        }
+                    }, TaskScheduler.Default);
+                _Log.LogInfo("转场前服务器交易数据已同步一轮，旧落库队列正在后台异步排干（不等待，不阻塞转场流程）。");
+                // 🆕 V20260919_EXCLUDE_UNCLOSED_COMBOS：必须在 TradeStateStore.ClearRace(...) 清空
+                // 之前调用——用的就是清空前这最后一份权威快照，把这一场里没能完全平仓的组合记录进
+                // QExcludeCombos/QPExcludeCombos 排除名单，供下一场 AutoBetting 跳过它们。
+                RecordUnclosedCombosBeforeClearRace();
                 // ==========================================
                 // 💡 盘口及缓存数据清理（防止上一场数据污染下一场）
                 // ==========================================
@@ -3498,62 +3746,99 @@ namespace AutoHorseRace
                 _betLocks?.Clear();
                 _eatLocks?.Clear();
                 _Log.LogInfo("上一场的 LastOdds、comboLocks、本地防重缓存、挂单全集及并发锁已全部清理完成。");
+                // 🔧 V20260919_AUTOTONEXTRACE_UI_FREEZE_FIX：修复"程序运行中会卡死"的另一个根因——
+                // 原来 HTTPHelper.queryRaceInfo(...) 这个网络请求是直接写在 this.Invoke(...) 的委托里面
+                // 执行的，而 AutoToNextRace() 本身跑在后台线程（由 RefreshBetInfoDataList 的
+                // Task.Run 分支触发），this.Invoke 是同步阻塞调用：委托内容会被派发到 UI 线程上
+                // 执行完才返回。也就是说，只要自动转场触发（完全自动，不需要任何手动点击），
+                // 这个网络请求就会直接占着 UI 线程跑，界面在请求返回之前完全无响应——网络越慢
+                // /服务器响应越久，卡死时间越长，这正好和"手动下注没有调用过、纯自动运行时也会
+                // 卡死"这个现象吻合。
+                //
+                // 修复思路：AutoToNextRace() 本来就已经在后台线程上，只需要把
+                // "读取 comboBoxRaceNo 当前状态"和"最终写回 UI + SaveConfig"这两小段真正需要
+                // 跨线程访问控件的部分留在 Invoke 里（都是纯内存操作，几乎不耗时），中间的
+                // queryRaceInfo 网络请求和结果解析完全放在当前后台线程执行，不再占用 UI 线程。
+                int currentIndex = -1, itemCount = 0;
                 this.Invoke(new Action(() =>
                 {
-                    if (comboBoxRaceNo.SelectedIndex < comboBoxRaceNo.Items.Count - 1)
+                    currentIndex = comboBoxRaceNo.SelectedIndex;
+                    itemCount = comboBoxRaceNo.Items.Count;
+                }));
+
+                if (currentIndex < itemCount - 1)
+                {
+                    int nextIndex = currentIndex + 1;
+                    string nextRaceNo = null;
+                    this.Invoke(new Action(() =>
                     {
-                        int currentIndex = comboBoxRaceNo.SelectedIndex;
-                        int nextIndex = currentIndex + 1;
-                        _Log.LogInfo($"自动切换到下一场:[{comboBoxRaceNo.Text}] -> [{comboBoxRaceNo.Items[nextIndex]}]");
-                        // 在转场前重新查询下一场的开赛时间，避免沿用上一场遗留的 CurrentRaceTime
-                        // 导致强平/自动下注时间窗口判断用的是错误的开赛时间。
-                        string nextRaceNo = comboBoxRaceNo.Items[nextIndex].ToString();
-                        JObject raceInfoResult = HTTPHelper.queryRaceInfo(_Config.EAServerAddress, _EAAccount.UserCode, _Config.CurrentRaceDate, _Config.CurrentRaceType, nextRaceNo);
-                        if (raceInfoResult != null && (bool)raceInfoResult["success"])
+                        nextRaceNo = comboBoxRaceNo.Items[nextIndex].ToString();
+                        _Log.LogInfo($"自动切换到下一场:[{comboBoxRaceNo.Text}] -> [{nextRaceNo}]");
+                    }));
+
+                    // 在转场前重新查询下一场的开赛时间，避免沿用上一场遗留的 CurrentRaceTime
+                    // 导致强平/自动下注时间窗口判断用的是错误的开赛时间。
+                    // 🔧 网络请求 + 结果解析全部放在当前后台线程执行，不再包在 this.Invoke 里。
+                    JObject raceInfoResult = HTTPHelper.queryRaceInfo(_Config.EAServerAddress, _EAAccount.UserCode, _Config.CurrentRaceDate, _Config.CurrentRaceType, nextRaceNo);
+                    string resolvedRaceTime24 = null;
+                    if (raceInfoResult != null && (bool)raceInfoResult["success"])
+                    {
+                        JObject dataObj = raceInfoResult["data"] as JObject;
+                        // 优先在 available_races 里按 race_num 精确匹配下一场；查不到再兜底用 race_time_info
+                        // （接口按 race_num 请求时通常只返回这一场，两者内容一致）。
+                        string rawTimeStr = null;
+                        if (dataObj?["available_races"] is JArray availableRaces)
                         {
-                            JObject dataObj = raceInfoResult["data"] as JObject;
-                            // 优先在 available_races 里按 race_num 精确匹配下一场；查不到再兜底用 race_time_info
-                            // （接口按 race_num 请求时通常只返回这一场，两者内容一致）。
-                            string rawTimeStr = null;
-                            if (dataObj?["available_races"] is JArray availableRaces)
+                            foreach (var item in availableRaces)
                             {
-                                foreach (var item in availableRaces)
+                                if (string.Equals(item["race_num"]?.ToString(), nextRaceNo))
                                 {
-                                    if (string.Equals(item["race_num"]?.ToString(), nextRaceNo))
-                                    {
-                                        rawTimeStr = item["time"]?.ToString();
-                                        break;
-                                    }
+                                    rawTimeStr = item["time"]?.ToString();
+                                    break;
                                 }
                             }
-                            if (string.IsNullOrEmpty(rawTimeStr))
-                            {
-                                rawTimeStr = dataObj?["race_time_info"]?.ToString();
-                            }
-                            if (!string.IsNullOrEmpty(rawTimeStr) && TryParseRaceTimeTo24Hour(rawTimeStr, out string raceTime24))
-                            {
-                                _Config.CurrentRaceTime = raceTime24;
-                                textBoxCurrentRaceTime.Text = _Config.CurrentRaceTime;
-                                _Log.LogInfo($"转场前重新查询到下一场[{nextRaceNo}]开赛时间: '{rawTimeStr}' -> '{raceTime24}'");
-                            }
-                            else
-                            {
-                                _logger.Error($"[自动转场] 解析下一场[{nextRaceNo}]开赛时间失败，原始字符串='{rawTimeStr}'，本次转场沿用旧的 CurrentRaceTime='{_Config.CurrentRaceTime}'");
-                            }
+                        }
+                        if (string.IsNullOrEmpty(rawTimeStr))
+                        {
+                            rawTimeStr = dataObj?["race_time_info"]?.ToString();
+                        }
+                        if (!string.IsNullOrEmpty(rawTimeStr) && TryParseRaceTimeTo24Hour(rawTimeStr, out string raceTime24))
+                        {
+                            resolvedRaceTime24 = raceTime24;
+                            _Log.LogInfo($"转场前重新查询到下一场[{nextRaceNo}]开赛时间: '{rawTimeStr}' -> '{raceTime24}'");
                         }
                         else
                         {
-                            _logger.Error($"[自动转场] queryRaceInfo 查询下一场[{nextRaceNo}]开赛时间失败，本次转场沿用旧的 CurrentRaceTime='{_Config.CurrentRaceTime}'");
+                            _logger.Error($"[自动转场] 解析下一场[{nextRaceNo}]开赛时间失败，原始字符串='{rawTimeStr}'，本次转场沿用旧的 CurrentRaceTime='{_Config.CurrentRaceTime}'");
                         }
-                        comboBoxRaceNo.SelectedIndex = nextIndex;
                     }
                     else
                     {
+                        _logger.Error($"[自动转场] queryRaceInfo 查询下一场[{nextRaceNo}]开赛时间失败，本次转场沿用旧的 CurrentRaceTime='{_Config.CurrentRaceTime}'");
+                    }
+
+                    // 网络请求已经跑完，这里只剩纯内存的赋值 + SaveConfig（写本地文件，很快），
+                    // 放回 UI 线程不会再造成明显卡顿。
+                    this.Invoke(new Action(() =>
+                    {
+                        if (resolvedRaceTime24 != null)
+                        {
+                            _Config.CurrentRaceTime = resolvedRaceTime24;
+                            textBoxCurrentRaceTime.Text = _Config.CurrentRaceTime;
+                        }
+                        comboBoxRaceNo.SelectedIndex = nextIndex;
+                        SaveConfig();
+                    }));
+                }
+                else
+                {
+                    this.Invoke(new Action(() =>
+                    {
                         _Log.LogInfo("最后一场已结束,停止自动扫描");
                         UpdateQueryEATBETInfoStatus("扫描已停止");
-                    }
-                    SaveConfig();
-                }));
+                        SaveConfig();
+                    }));
+                }
             }
             else
             {
@@ -3928,9 +4213,28 @@ namespace AutoHorseRace
             //List<BetInfo> BetInfos = HTTPHelper.queryMyTrade(_Config.EAServerAddress, _EAAccount.UserCode, _Config.CurrentRaceDate, _Config.CurrentRaceType, _Config.CurrentRaceNo);
             //RefreshMyTradeList(BetInfos);
         }
+        // 🔧 V20260919_MANUAL_BUTTON_UI_FREEZE_FIX：修复"程序运行中会卡死"的根因 BUG——
+        // 原来这里直接在 UI 线程同步调用 RefreshBetInfoDataList()，而这个方法内部会做
+        // queryMarket/queryMyTrade 等网络请求、AutoBetting 里还有下单请求和 Thread.Sleep，
+        // 全部堆在 UI 线程上跑，光是这些耗时 I/O 本身就足以让界面卡住好几秒甚至更久。
+        //
+        // 更严重的是死锁风险：定时扫描（_timerRefreshBetInfo -> QueryEATBETInfoDataAsync）
+        // 一直是用 Task.Run(() => RefreshBetInfoDataList()) 丢到后台线程执行的，执行期间会
+        // 持有 _autoBettingLock，并在持锁期间通过 _Log.LogInfo(...) 反复跨线程 Invoke 回
+        // UI 线程刷新日志列表。如果恰好这时用户点了这个按钮，UI 线程会直接卡在
+        // RefreshBetInfoDataList() 内部的 lock (_autoBettingLock) 上等待——而后台线程的
+        // _Log.LogInfo 又要靠 UI 线程的消息泵去处理它发起的 Invoke 才能往下走、进而释放锁。
+        // UI 线程等锁、后台线程等 UI 线程，二者互相等待，形成经典的 WinForms 死锁，
+        // 界面从此彻底卡死，只能强制结束进程，跟"程序运行中会卡死"的现象完全吻合。
+        //
+        // 修复：改用类里现成的 AsynExec 辅助方法——按钮先禁用防止连续点击排队，
+        // 真正的分析/下单流程整体丢到后台线程执行（跟定时扫描走的是同一套
+        // RefreshBetInfoDataList，行为不变），期间如果两边都在跑，无非是某一方在后台线程
+        // 里等一小会儿锁，不会再牵连到 UI 线程和消息泵，自然也就不会再死锁；执行完毕或
+        // 出现异常都会在 finally 里把按钮重新启用（异常还会弹窗提示，跟其它按钮行为一致）。
         private void buttonManualAutoBetting_Click(object sender, EventArgs e)
         {
-            RefreshBetInfoDataList();
+            _ = AsynExec(buttonManualAutoBetting, () => RefreshBetInfoDataList());
         }
         private void checkBoxAutoDeletePendingOrder_CheckedChanged(object sender, EventArgs e)
         {
@@ -3981,24 +4285,61 @@ namespace AutoHorseRace
         /// RefreshMyTradeSnapshot / QueryAndApplyMyTradeSnapshotAsync 里的 `_EatBetInfosList = eatBetInfosList;`），
         /// 旧的 List 对象发布后不会再被原地修改，所以这里先用局部变量接住当前引用再遍历，
         /// 是一次安全的快照读取，不会跟并发的重新赋值互相踩踏。
+        ///
+        /// 🔧 V20260923_REFRESH_LISTS_TRUE_ASYNC：原来整个方法是直接同步执行的——目前所有
+        /// 调用点（timerRefreshAutoBettingInfo_Tick 定时器、buttonRefreshBettingStatus_Click
+        /// 按钮、comboBoxRaceRound_SelectedIndexChanged 切换场次）确实都已经在 UI 线程上，
+        /// 所以不会跨线程访问控件出错，但如果 _EatBetInfosList 条目较多，foreach+Add 这段
+        /// 循环会直接占用 UI 线程的时间，每 3 秒定时器触发一次就可能让界面卡顿一下。
+        /// 现在改成跟 RefreshMyTradeList 一致的异步派发模式：把"读取快照"这一步放进
+        /// Task.Run（当前很快，但保留了未来做更重处理的扩展点），真正落到 _BettingList/
+        /// 界面控件上的这几行用 BeginInvoke（异步、不阻塞）派发回 UI 线程，调用方
+        /// （包括 UI 线程上的定时器/按钮）不再需要等这几行跑完就能继续往下走。加上
+        /// IsDisposed/IsHandleCreated 判断和 try/catch，窗体关闭时不会再尝试派发、
+        /// 任何异常都会被记录而不是静默丢失。方法签名保持 void 不变，所有调用点无需改动。
         /// </summary>
         private void RefreshBettingInfoDataList()
         {
             if (_EAAccount.IsLogin && _EnableBettingInfoRefresh)
             {
-                // 快照当前引用，避免遍历过程中被其它线程重新赋值。
-                var bettingInfos = _EatBetInfosList;
-                _BettingList.RaiseListChangedEvents = false;
-                _BettingList.Clear();
-                if (bettingInfos != null && bettingInfos.Count > 0)
+                Task.Run(() =>
                 {
-                    foreach (var item in bettingInfos)
+                    try
                     {
-                        _BettingList.Add(item);
+                        // 快照当前引用，避免遍历过程中被其它线程重新赋值。
+                        var bettingInfos = _EatBetInfosList;
+
+                        // 🔧 窗体正在关闭/已销毁时不要再往 UI 线程派发。
+                        if (this.IsDisposed || !this.IsHandleCreated) return;
+
+                        // 🔧 BeginInvoke：异步派发到 UI 线程消息队列，不阻塞调用方等待执行完成。
+                        this.BeginInvoke(new Action(() =>
+                        {
+                            try
+                            {
+                                _BettingList.RaiseListChangedEvents = false;
+                                _BettingList.Clear();
+                                if (bettingInfos != null && bettingInfos.Count > 0)
+                                {
+                                    foreach (var item in bettingInfos)
+                                    {
+                                        _BettingList.Add(item);
+                                    }
+                                }
+                                _BettingList.RaiseListChangedEvents = true;
+                                _BettingList.ResetBindings();
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(ex, "[RefreshBettingInfoDataList] UI 线程更新下注列表时异常");
+                            }
+                        }));
                     }
-                }
-                _BettingList.RaiseListChangedEvents = true;
-                _BettingList.ResetBindings();
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "[RefreshBettingInfoDataList] 异步刷新下注列表时异常");
+                    }
+                });
             }
         }
         private void buttonRefreshBettingStatus_Click(object sender, EventArgs e)
