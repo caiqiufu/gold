@@ -119,6 +119,9 @@
             buttonTestRefresh = new Button();
             buttonManualAutoBetting = new Button();
             groupBox2 = new GroupBox();
+            buttonOpenQBettingSelector = new Button();
+            label32 = new Label();
+            textBoxQBettingCombos = new TextBox();
             buttonOpenQSelector = new Button();
             label34 = new Label();
             numericUpDownQLowerThreshold = new NumericUpDown();
@@ -138,7 +141,10 @@
             label18 = new Label();
             checkBoxQAutoBettingFlag = new CheckBox();
             groupBox3 = new GroupBox();
+            buttonbuttonOpenQPBettingSelector = new Button();
+            label33 = new Label();
             buttonOpenQPSelector = new Button();
+            textBoxQPBettingCombos = new TextBox();
             label35 = new Label();
             numericUpDownQPLowerThreshold = new NumericUpDown();
             label31 = new Label();
@@ -1035,6 +1041,9 @@
             // 
             // groupBox2
             // 
+            groupBox2.Controls.Add(buttonOpenQBettingSelector);
+            groupBox2.Controls.Add(label32);
+            groupBox2.Controls.Add(textBoxQBettingCombos);
             groupBox2.Controls.Add(buttonOpenQSelector);
             groupBox2.Controls.Add(label34);
             groupBox2.Controls.Add(numericUpDownQLowerThreshold);
@@ -1060,9 +1069,38 @@
             groupBox2.TabStop = false;
             groupBox2.Text = "Q";
             // 
+            // buttonOpenQBettingSelector
+            // 
+            buttonOpenQBettingSelector.Location = new Point(755, 50);
+            buttonOpenQBettingSelector.Name = "buttonOpenQBettingSelector";
+            buttonOpenQBettingSelector.Size = new Size(80, 28);
+            buttonOpenQBettingSelector.TabIndex = 97;
+            buttonOpenQBettingSelector.Text = "选择组合";
+            buttonOpenQBettingSelector.UseVisualStyleBackColor = true;
+            buttonOpenQBettingSelector.Click += buttonOpenQBettingSelector_Click;
+            // 
+            // label32
+            // 
+            label32.AutoSize = true;
+            label32.Font = new Font("Microsoft YaHei", 10.5F);
+            label32.Location = new Point(497, 54);
+            label32.Name = "label32";
+            label32.Size = new Size(37, 20);
+            label32.TabIndex = 95;
+            label32.Text = "强赌";
+            // 
+            // textBoxQBettingCombos
+            // 
+            textBoxQBettingCombos.BorderStyle = BorderStyle.FixedSingle;
+            textBoxQBettingCombos.Location = new Point(540, 53);
+            textBoxQBettingCombos.Name = "textBoxQBettingCombos";
+            textBoxQBettingCombos.ReadOnly = true;
+            textBoxQBettingCombos.Size = new Size(206, 23);
+            textBoxQBettingCombos.TabIndex = 96;
+            // 
             // buttonOpenQSelector
             // 
-            buttonOpenQSelector.Location = new Point(446, 48);
+            buttonOpenQSelector.Location = new Point(411, 50);
             buttonOpenQSelector.Name = "buttonOpenQSelector";
             buttonOpenQSelector.Size = new Size(80, 28);
             buttonOpenQSelector.TabIndex = 80;
@@ -1097,17 +1135,17 @@
             label30.Font = new Font("Microsoft YaHei", 10.5F);
             label30.Location = new Point(6, 54);
             label30.Name = "label30";
-            label30.Size = new Size(23, 20);
+            label30.Size = new Size(37, 20);
             label30.TabIndex = 83;
-            label30.Text = "马";
+            label30.Text = "下注";
             // 
             // textBoxQCombos
             // 
             textBoxQCombos.BorderStyle = BorderStyle.FixedSingle;
-            textBoxQCombos.Location = new Point(30, 53);
+            textBoxQCombos.Location = new Point(51, 53);
             textBoxQCombos.Name = "textBoxQCombos";
             textBoxQCombos.ReadOnly = true;
-            textBoxQCombos.Size = new Size(405, 23);
+            textBoxQCombos.Size = new Size(353, 23);
             textBoxQCombos.TabIndex = 84;
             // 
             // numericUpDownQEndOdds
@@ -1245,7 +1283,10 @@
             // 
             // groupBox3
             // 
+            groupBox3.Controls.Add(buttonbuttonOpenQPBettingSelector);
+            groupBox3.Controls.Add(label33);
             groupBox3.Controls.Add(buttonOpenQPSelector);
+            groupBox3.Controls.Add(textBoxQPBettingCombos);
             groupBox3.Controls.Add(label35);
             groupBox3.Controls.Add(numericUpDownQPLowerThreshold);
             groupBox3.Controls.Add(label31);
@@ -1270,15 +1311,44 @@
             groupBox3.TabStop = false;
             groupBox3.Text = "QP";
             // 
+            // buttonbuttonOpenQPBettingSelector
+            // 
+            buttonbuttonOpenQPBettingSelector.Location = new Point(754, 51);
+            buttonbuttonOpenQPBettingSelector.Name = "buttonbuttonOpenQPBettingSelector";
+            buttonbuttonOpenQPBettingSelector.Size = new Size(80, 28);
+            buttonbuttonOpenQPBettingSelector.TabIndex = 98;
+            buttonbuttonOpenQPBettingSelector.Text = "选择组合";
+            buttonbuttonOpenQPBettingSelector.UseVisualStyleBackColor = true;
+            buttonbuttonOpenQPBettingSelector.Click += buttonbuttonOpenQPBettingSelector_Click;
+            // 
+            // label33
+            // 
+            label33.AutoSize = true;
+            label33.Font = new Font("Microsoft YaHei", 10.5F);
+            label33.Location = new Point(499, 55);
+            label33.Name = "label33";
+            label33.Size = new Size(37, 20);
+            label33.TabIndex = 97;
+            label33.Text = "强赌";
+            // 
             // buttonOpenQPSelector
             // 
-            buttonOpenQPSelector.Location = new Point(446, 51);
+            buttonOpenQPSelector.Location = new Point(409, 51);
             buttonOpenQPSelector.Name = "buttonOpenQPSelector";
             buttonOpenQPSelector.Size = new Size(80, 28);
             buttonOpenQPSelector.TabIndex = 95;
             buttonOpenQPSelector.Text = "选择组合";
             buttonOpenQPSelector.UseVisualStyleBackColor = true;
             buttonOpenQPSelector.Click += buttonOpenQPSelector_Click;
+            // 
+            // textBoxQPBettingCombos
+            // 
+            textBoxQPBettingCombos.BorderStyle = BorderStyle.FixedSingle;
+            textBoxQPBettingCombos.Location = new Point(543, 54);
+            textBoxQPBettingCombos.Name = "textBoxQPBettingCombos";
+            textBoxQPBettingCombos.ReadOnly = true;
+            textBoxQPBettingCombos.Size = new Size(206, 23);
+            textBoxQPBettingCombos.TabIndex = 98;
             // 
             // label35
             // 
@@ -1307,17 +1377,17 @@
             label31.Font = new Font("Microsoft YaHei", 10.5F);
             label31.Location = new Point(9, 55);
             label31.Name = "label31";
-            label31.Size = new Size(23, 20);
+            label31.Size = new Size(37, 20);
             label31.TabIndex = 95;
-            label31.Text = "马";
+            label31.Text = "下注";
             // 
             // textBoxQPCombos
             // 
             textBoxQPCombos.BorderStyle = BorderStyle.FixedSingle;
-            textBoxQPCombos.Location = new Point(34, 54);
+            textBoxQPCombos.Location = new Point(53, 54);
             textBoxQPCombos.Name = "textBoxQPCombos";
             textBoxQPCombos.ReadOnly = true;
-            textBoxQPCombos.Size = new Size(401, 23);
+            textBoxQPCombos.Size = new Size(351, 23);
             textBoxQPCombos.TabIndex = 96;
             // 
             // numericUpDownQPEndOdds
@@ -1648,5 +1718,11 @@
         private Button buttonOpenQPSelector;
         private Button buttonRefreshBettingStatus;
         private CheckBox checkBoxAutoRefreshBetting;
+        private Label label32;
+        private TextBox textBoxQBettingCombos;
+        private Button buttonOpenQBettingSelector;
+        private Button buttonbuttonOpenQPBettingSelector;
+        private Label label33;
+        private TextBox textBoxQPBettingCombos;
     }
 }

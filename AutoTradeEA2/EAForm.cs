@@ -1736,8 +1736,6 @@ namespace uClient.Broker
                 _Context["MartingaleAddPosition3"] = false;
                 _StrategyConfig.MartingaleAddPosition3 = false;
             }
-
-
         }
         /// <summary>
         /// 更新OrderTypeDetail下拉框值

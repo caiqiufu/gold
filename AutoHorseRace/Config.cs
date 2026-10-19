@@ -195,6 +195,15 @@ namespace AutoHorseRace
         /// QP允许的下注马位,1-2,1-3,1-5
         /// </summary>
         public string QPCombos = string.Empty;
+
+        /// <summary>
+        /// Q允许的强赌马位,1-2,1-3,1-5
+        /// </summary>
+        public string QBettingCombos = string.Empty;
+        /// <summary>
+        /// QP允许的强赌马位,1-2,1-3,1-5
+        /// </summary>
+        public string QPBettingCombos = string.Empty;
         /// <summary>
         /// 不允许下注的组合
         /// </summary>
@@ -218,5 +227,9 @@ namespace AutoHorseRace
 
         [JsonIgnore]  // 防止 SaveConfig()/LoadConfigFile() 里的 JsonConvert 序列化/反序列化尝试处理这个运行时对象
         public TradeStateStore TradeStateStore { get; } = new TradeStateStore();
+        public int BetTimeoutMinutes { get; set; } = 5; // 下注超时阈值(分钟)，默认5分钟
+
+
+
     }
 }

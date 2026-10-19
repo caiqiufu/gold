@@ -770,9 +770,15 @@ namespace AutoHorseRace
             var Q_BettingInfoDict = BuildBettingInfoDict(allStates, "Q");
             var QP_BettingInfoDict = BuildBettingInfoDict(allStates, "QP");
 
-            if (Q_BettingInfoDict.Count == 0 && QP_BettingInfoDict.Count == 0)
+            // 🆕 V20261017：配置了 QBettingCombos / QPBettingCombos 时，即使没有任何待平仓组合，
+            // 也必须继续往下走，去执行"强赌"。原来这里两个字典都为空就直接 return，会让强赌永远不触发。
+            bool hasQBettingCombos = GetBettingComboSet("Q").Count > 0;
+            bool hasQPBettingCombos = GetBettingComboSet("QP").Count > 0;
+
+            if (Q_BettingInfoDict.Count == 0 && QP_BettingInfoDict.Count == 0 &&
+                !hasQBettingCombos && !hasQPBettingCombos)
             {
-                _Log.LogInfo("当前无需要重新挂吃注单的组合，本轮强平无需下单");
+                _Log.LogInfo("当前无需要重新挂吃注单的组合，且未配置强赌组合，本轮强平无需下单");
                 return;
             }
 
@@ -791,25 +797,22 @@ namespace AutoHorseRace
                 return;
             }
 
-            // 🔧 V20260913_CLOSE_MATCH_SIDE_FIX：强平要挂的是"吃"单，吃单必须匹配市场上别人挂出来的
-            // "赌"(BET)单才能成交——ClosePositionByDeadline 内部会把这里传入列表里、对应 combo 的那笔
-            // 记录的 odds/limit 当成"对手盘报价"来定价、下单。之前这里传的是 Q_EATBetInfos/QP_EATBetInfos
-            // （market 上别人挂的"吃"单），那是跟我方同边、根本不是可撮合的对手盘，绝大多数组合天然就
-            // 匹配不到（诊断日志里反复出现的"在本轮 EATBetInfos[N个不同combo]中找不到精确匹配"根因即在此），
-            // 而不是 combo 本身没有报价。现改为传入 Q_BETBetInfos/QP_BETBetInfos（market 上别人挂的"赌"单），
-            // 这才是我方"吃"单真正需要撮合的对手盘。
-            if (Q_BettingInfoDict.Count > 0)
+            // 🔧 V20260913_CLOSE_MATCH_SIDE_FIX：强平吃单撮合的是市场上别人挂的"赌"(BET)单，
+            // 因此传入 Q_BETBetInfos/QP_BETBetInfos。详见 ClosePositionByDeadline 参数说明。
+            if (Q_BettingInfoDict.Count > 0 || hasQBettingCombos)
             {
-                _Log.LogInfo($"[Q]强制平赌注");
+                _Log.LogInfo($"[Q]强制平赌注/强赌");
                 List<BetInfo> Q_BETBetInfos = BetBatInfos.ContainsKey("Q_BETBetInfos") ? BetBatInfos["Q_BETBetInfos"] : new List<BetInfo>();
-                ClosePositionByDeadline(Q_BettingInfoDict, Q_BETBetInfos, "Q");
+                List<BetInfo> Q_EATBetInfos = BetBatInfos.ContainsKey("Q_EATBetInfos") ? BetBatInfos["Q_EATBetInfos"] : new List<BetInfo>();
+                ClosePositionByDeadline(Q_BettingInfoDict, Q_BETBetInfos, Q_EATBetInfos, "Q");
             }
 
-            if (QP_BettingInfoDict.Count > 0)
+            if (QP_BettingInfoDict.Count > 0 || hasQPBettingCombos)
             {
-                _Log.LogInfo($"[QP]强制平赌注");
+                _Log.LogInfo($"[QP]强制平赌注/强赌");
                 List<BetInfo> QP_BETBetInfos = BetBatInfos.ContainsKey("QP_BETBetInfos") ? BetBatInfos["QP_BETBetInfos"] : new List<BetInfo>();
-                ClosePositionByDeadline(QP_BettingInfoDict, QP_BETBetInfos, "QP");
+                List<BetInfo> QP_EATBetInfos = BetBatInfos.ContainsKey("QP_EATBetInfos") ? BetBatInfos["QP_EATBetInfos"] : new List<BetInfo>();
+                ClosePositionByDeadline(QP_BettingInfoDict, QP_BETBetInfos, QP_EATBetInfos, "QP");
             }
         }
 
@@ -1150,6 +1153,8 @@ namespace AutoHorseRace
             numericUpDownQPMinLimit.Value = _Config.QPMinLimit;
             textBoxQCombos.Text = _Config.QCombos;
             textBoxQPCombos.Text = _Config.QPCombos;
+            textBoxQBettingCombos.Text = _Config.QBettingCombos;
+            textBoxQPBettingCombos.Text = _Config.QPBettingCombos;
             numericUpDownQLowerThreshold.Value = _Config.QLowerThreshold;
             numericUpDownQPLowerThreshold.Value = _Config.QPLowerThreshold;
             string[] raceTypes = _Config.SysConfig["Horse.RaceType"].Split(",");
@@ -1581,6 +1586,8 @@ namespace AutoHorseRace
                     _Config.QPEatSpread = (int)numericUpDownQPEatSpread.Value;
                     _Config.QCombos = textBoxQCombos.Text;
                     _Config.QPCombos = textBoxQPCombos.Text;
+                    _Config.QBettingCombos = textBoxQBettingCombos.Text;
+                    _Config.QPBettingCombos = textBoxQPBettingCombos.Text;
                     _Config.QLowerThreshold = (int)numericUpDownQLowerThreshold.Value;
                     _Config.QPLowerThreshold = (int)numericUpDownQPLowerThreshold.Value;
                     _Config.CurrentRaceNo = (string)comboBoxRaceNo.SelectedItem;
@@ -1951,6 +1958,38 @@ namespace AutoHorseRace
         // =========================================================================
         private readonly ConcurrentDictionary<string, object> _betLocks = new ConcurrentDictionary<string, object>();
         private readonly ConcurrentDictionary<string, object> _eatLocks = new ConcurrentDictionary<string, object>();
+        // =========================================================================
+        // 🆕 V20261011_BET_TIMEOUT：下注超时检测（简化版）
+        // 需求：组合第一次下赌注(BET)后记录下这个下注时间；之后每次这个组合再次满足下注
+        // 条件、准备下新的赌注时，先检查距离"首次下注时间"是否已经超过
+        // _Config.BetTimeoutMinutes（默认5分钟，可配置）——超过了就不再对该组合下新的赌注。
+        // 只记录【首次】下注时间，不会随后续每次下注滚动刷新：否则只要这个组合持续满足
+        // 下注条件、不断追加新单，时间窗口会被不断续上，永远触发不了超时，起不到"给这个
+        // 组合设一个下注时间上限"的效果。记录的时间随 AutoToNextRace() 转场一起清空。
+        // =========================================================================
+        /// <summary>
+        /// 记录每个组合【首次】成功下赌注的时间点（dictKey -> 首次下注时间）。
+        /// 随 AutoToNextRace() 转场一起清空，避免跨场残留。
+        /// </summary>
+        private readonly ConcurrentDictionary<string, DateTime> _firstBetTime = new ConcurrentDictionary<string, DateTime>();
+        /// <summary>
+        /// 检查某个组合距离【首次】下注是否已经超过配置的超时阈值。
+        /// 该组合还没下过注时返回 false（不受此限制）。
+        /// </summary>
+        /// <param name="dictKey">组合的状态字典键（ComboTradeState.BuildDictKey 结果）</param>
+        /// <param name="elapsed">若已下过注，返回距首次下注经过的时长；未下过注则为 TimeSpan.Zero</param>
+        /// <returns>true 表示已超过配置的超时阈值，调用方应跳过本轮下注</returns>
+        private bool IsBetTimeoutExceeded(string dictKey, out TimeSpan elapsed)
+        {
+            elapsed = TimeSpan.Zero;
+            if (!_firstBetTime.TryGetValue(dictKey, out DateTime firstBetAt))
+            {
+                return false; // 该组合本场还没下过注，不受这个限制
+            }
+            elapsed = DateTime.Now - firstBetAt;
+            int timeoutMinutes = _Config.BetTimeoutMinutes > 0 ? _Config.BetTimeoutMinutes : 5;
+            return elapsed.TotalMinutes > timeoutMinutes;
+        }
         /// <summary>
         /// 自动下注处理
         /// </summary>
@@ -1985,6 +2024,13 @@ namespace AutoHorseRace
                     _Config.TradeStateStore.TryGet(dictKey, out var state); // 全新组合时为 null，属正常情况
                     string blockReason = null;
                     bool isBlocked = state != null && _decisionEngine.ShouldSkipBet(state, out blockReason);
+                    // 🆕 V20261011_BET_TIMEOUT：在原有拦截判断之外，叠加"下注超时"检查——
+                    // 只在原本没被拦截时才检查，避免覆盖/混淆 ShouldSkipBet 已给出的拦截原因。
+                    if (!isBlocked && IsBetTimeoutExceeded(dictKey, out TimeSpan betElapsed))
+                    {
+                        isBlocked = true;
+                        blockReason = $"距首次下注已超时[已等待{betElapsed.TotalMinutes:F1}分钟 > 阈值{(_Config.BetTimeoutMinutes > 0 ? _Config.BetTimeoutMinutes : 5)}分钟]";
+                    }
                     if (isBlocked)
                     {
                         _logger.Debug($"组合 [{dictKey}] {blockReason}，下注拦截");
@@ -1992,7 +2038,7 @@ namespace AutoHorseRace
                     else
                     {
                         bool isOddsValid = bestInCurrentBatch.odds >= configEndOdds && bestInCurrentBatch.odds <= configStartOdds;
-                        bool isHeatValid = bestInCurrentBatch.limit >= configMinLimit;
+                        bool isHeatValid = bestInCurrentBatch.amount >= configMinLimit;
                         // 🔧 新增校验：EATBetInfos（对手盘"吃"方向报价）里有这个 combo，不代表这个 combo
                         // 在"赌"方向（BETBetInfos）也真的有行情/可下注——如果 BETBetInfos 里根本找不到
                         // 这个 combo，很可能意味着该组合当前暂停交易、或者两份市场数据这一轮没能同步齐，
@@ -2007,7 +2053,7 @@ namespace AutoHorseRace
                             && BETBetInfos.Any(b => string.Equals(b.combo, targetCombo) && b.amount > configStakeAmount);
                         if (isOddsValid && isHeatValid && isComboActiveInBetMarket)
                         {
-                            _logger.Debug($"🔥 触发下注！组合: {bestInCurrentBatch.combo} | 水折: {bestInCurrentBatch.odds}% | 限额: {bestInCurrentBatch.limit}");
+                            _logger.Debug($"🔥 触发下注！组合: {bestInCurrentBatch.combo} | 水折: {bestInCurrentBatch.odds}% | 票数: {bestInCurrentBatch.amount}");
                             // 🔧 不再直接修改 bestInCurrentBatch（它是 eatList 里的共享对象，
                             // AutoEatProcess 紧接着会对同一个 eatList 再取一次 bestBet，
                             // 如果这里直接改共享对象的 odds，AutoEatProcess 会看到被改过的值）。
@@ -2086,6 +2132,16 @@ namespace AutoHorseRace
                                         comboState.ReleaseBetIntent(intentId);
                                         _logger.Warn($"[{targetCombo}] 下注被服务器明确拒绝: {rejectMsg}，释放预占。");
                                     }
+                                }
+                                else
+                                {
+                                    // 🆕 V20261011_BET_TIMEOUT：只在服务器明确接受（IsOrderAccepted==true）
+                                    // 时才记录首次下注时间——服务器明确拒绝说明这笔注确定没有成交，不算
+                                    // "已下注"；网络异常/结果未知（result==null）那笔单子最终有没有成交
+                                    // 本身就不确定，保守起见也不在这里开始计时，交给下一轮服务器快照核实
+                                    // 后（state.BetExecuted 变化）再由其它逻辑处理。GetOrAdd 保证同一组合
+                                    // 本场只记录第一次下注的时间，后续重复下注不会刷新这个时间点。
+                                    _firstBetTime.GetOrAdd(dictKey, _ => DateTime.Now);
                                 }
                                 _Log.LogInfo($"发送下注第[{RequestNo}]笔...");
                             }
@@ -2336,24 +2392,64 @@ namespace AutoHorseRace
             return currentBettingPendingStatus; // 默认返回 0（代表其他或未知中间状态）
         }
         /// <summary>
-        /// 强迫策略，逐步增加水折平仓
+        /// 强迫策略，逐步增加水折平仓；并对 QBettingCombos/QPBettingCombos 执行保留/强赌。
         /// </summary>
-        /// <param name="bettingInfoDict"></param>
+        /// <param name="bettingInfoDict">本轮待平仓组合（外层 allStates 过滤后的结果）</param>
         /// <param name="BETBetInfos">
         /// market 上别人挂出来的"赌"(BET)单——即我方即将提交的"吃"(EAT)单真正要撮合的对手盘。
-        /// 调用方必须传 queryMarket 返回的 Q_BETBetInfos/QP_BETBetInfos，不能传 EAT 侧数据
-        /// （EAT 侧是别人也在等吃、跟我方同边，不是可撮合的对手盘，会导致几乎所有 combo 都
-        /// 精确匹配不到，参见下面 [强平诊断] 日志）。
+        /// 调用方必须传 queryMarket 返回的 Q_BETBetInfos/QP_BETBetInfos，不能传 EAT 侧数据。
         /// </param>
-        /// <param name="type"></param>
-        public void ClosePositionByDeadline(Dictionary<string, IDictionary<string, string>> bettingInfoDict, List<BetInfo> BETBetInfos, string type)
+        /// <param name="Q_EATBetInfos">
+        /// market 上别人挂出来的"吃"(EAT)单——我方"赌"单的对手盘，强赌以其中该组合的最低水折定价。
+        /// </param>
+        /// <param name="type">Q / QP</param>
+        public void ClosePositionByDeadline(Dictionary<string, IDictionary<string, string>> bettingInfoDict, List<BetInfo> BETBetInfos, List<BetInfo> Q_EATBetInfos, string type)
         {
-            if (bettingInfoDict == null || bettingInfoDict.Count == 0)
-            {
-                return;
-            }
-            _Log.LogInfo($"BETBetInfos[{BETBetInfos?.Count ?? 0}],开始处理强平...");
+            // 🆕 V20261017：待平仓列表为空时不能直接 return——强赌组合仍需处理。
+            bettingInfoDict = bettingInfoDict ?? new Dictionary<string, IDictionary<string, string>>();
 
+            // =================================================================
+            // 🆕 V20261017 规则1 / 规则2 的组合划分
+            //
+            // bettingCombos：配置的强赌组合，已转换成与市场 combo 相同的格式
+            //               （Q 为 "1-2"，QP 为 "(1-2)"）。
+            // originalCloseKeys：本轮原始待平仓列表，规则2 判断"是否在待平仓列表中"
+            //               必须用它，而不是用规则1 过滤后的结果。
+            // =================================================================
+            HashSet<string> bettingCombos = GetBettingComboSet(type);
+            var originalCloseKeys = new HashSet<string>(bettingInfoDict.Keys);
+
+            // 规则1：在强赌组合中的待平仓组合，不强平。
+            var keptCombos = originalCloseKeys.Where(c => bettingCombos.Contains(c)).ToList();
+            if (keptCombos.Count > 0)
+            {
+                _Log.LogInfo($"[强平][{type}][保留赌注] 以下[{keptCombos.Count}]个待平仓组合在 {type}BettingCombos 中，本轮不强平: [{string.Join(", ", keptCombos)}]");
+            }
+            var closeDict = bettingInfoDict
+                .Where(kv => !bettingCombos.Contains(kv.Key))
+                .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            // 规则2：强赌组合中不在原始待平仓列表里的，执行强赌。
+            var forceBetCombos = bettingCombos.Where(c => !originalCloseKeys.Contains(c)).ToList();
+
+            _Log.LogInfo($"BETBetInfos[{BETBetInfos?.Count ?? 0}],开始处理强平[{closeDict.Count}]个 / 保留[{keptCombos.Count}]个 / 强赌[{forceBetCombos.Count}]个...");
+
+            if (closeDict.Count > 0)
+            {
+                CloseComboPositions(closeDict, BETBetInfos, type);
+            }
+
+            if (forceBetCombos.Count > 0)
+            {
+                ForceBetByDeadline(forceBetCombos, Q_EATBetInfos, type);
+            }
+        }
+
+        /// <summary>
+        /// 原 ClosePositionByDeadline 的强平主体（逻辑未改动，只是改为接收规则1过滤后的待平仓字典）。
+        /// </summary>
+        private void CloseComboPositions(Dictionary<string, IDictionary<string, string>> bettingInfoDict, List<BetInfo> BETBetInfos, string type)
+        {
             // 🔧 诊断：真正决定"某个组合是否会实际下强平单"的关键一步，是后面 Parallel.ForEach
             // 里 `BETBetInfos.Where(b => string.Equals(comboKey, b.combo))` 这行精确字符串匹配——
             // 如果 queryMarket 返回的盘口数据里，这个 combo 的命名格式（马号顺序、是否带括号、
@@ -2383,10 +2479,6 @@ namespace AutoHorseRace
             }
 
             bool isQStake = string.Equals(type, "Q");
-            double configSpread = isQStake ? _Config.QEatSpread : _Config.QPEatSpread;
-            double configStartOdds = isQStake ? _Config.QStartOdds : _Config.QPStartOdds;
-            double configEndOdds = isQStake ? _Config.QEndOdds : _Config.QPEndOdds;
-            double configMinLimit = isQStake ? _Config.QMinLimit : _Config.QPMinLimit;
             double configStakeAmount = isQStake ? _Config.QStakeAmount : _Config.QPStakeAmount;
             // 使用 Parallel.ForEach 按照 combo 分组进行多线程并发处理
             // V20260918_CODE_REVIEW_FIXES(7)：加上 MaxDegreeOfParallelism 上限，避免 combo 数量
@@ -2448,9 +2540,6 @@ namespace AutoHorseRace
                                 double requestedStake = Math.Min(remainingEatAmount, configStakeAmount);
                                 if (requestedStake <= AmountEpsilon)
                                 {
-                                    // 🔧 诊断：原来这里是纯静默 return，如果 remainingEatAmount 在这一刻
-                                    // 被算成 <=0（哪怕外层 allStates 判断时是 >0，同样可能是 TOCTOU 状态漂移
-                                    // 导致），之前完全没有任何日志能解释这个组合为什么没有下强平单。
                                     _logger.Debug($"[{dictKey}] 强平跳过：remainingEatAmount={remainingEatAmount:F3}, " +
                                                   $"configStakeAmount={configStakeAmount:F3} ⇒ requestedStake={requestedStake:F3} <= {AmountEpsilon}，无需下单。");
                                     return;
@@ -2487,19 +2576,8 @@ namespace AutoHorseRace
                                 };
                                 JObject result = ExecuteTrade(pendingInfo, targetEatBetInfo, "M", "SO");
 
-                                // 🔧 关键修复：区分"真正的网络异常/超时"和"服务器明确拒绝"两种情况，
-                                // 不再无差别地对所有失败都保留预占。
-                                //
-                                // 依据 HTTPHelper.singleAutoTrade 的修复：
-                                //   - result == null        → HTTP 请求本身异常、或响应体无法解析为合法 JSON，
-                                //                              这笔单子最终是否成交是"未知"的，必须保留预占，
-                                //                              等下一轮 ApplyServerSnapshot（服务器权威快照）核实，
-                                //                              避免"以为没成交、实际已成交"导致的重复提交和超发。
-                                //   - result != null 且未接受 → 服务器已经正常处理完请求，并给出了明确的业务拒绝
-                                //                              （例如 {"success":false,"message":"...你的交易不成功。"}），
-                                //                              这笔单子确定没有成交。继续保留预占没有意义，只会白白
-                                //                              占用 60 秒 TTL，阻止这个 combo 在下一轮被重新判断和
-                                //                              重试，必须立即释放。
+                                // 区分"网络异常/超时"（result == null，保留预占等服务器快照核实）
+                                // 与"服务器明确拒绝"（立即释放预占，允许下一轮重新判断）。
                                 if (!IsOrderAccepted(result))
                                 {
                                     if (result == null)
@@ -2530,6 +2608,181 @@ namespace AutoHorseRace
                     }
                 }
             });
+        }
+
+        /// <summary>强赌水折下限：EAT 侧最低水折低于 81 时直接跳过，不强赌。</summary>
+        private const int ForceBetFloorOdds = 81;
+
+        /// <summary>
+        /// 解析 QBettingCombos / QPBettingCombos，转换成与市场 combo 字段一致的格式：
+        ///   Q  → "1-2"
+        ///   QP → "(1-2)"（配置框里按惯例填的是不带括号的 "1-2"，与 QPCombos 一致）
+        /// 未配置时返回空集合（不是 null），表示不保留、不强赌。
+        /// </summary>
+        private HashSet<string> GetBettingComboSet(string type)
+        {
+            bool isQ = string.Equals(type, "Q");
+            var raw = Utils.Utils.GetAllowedSet(isQ ? _Config.QBettingCombos : _Config.QPBettingCombos);
+            var result = new HashSet<string>(StringComparer.Ordinal);
+            if (raw == null)
+            {
+                return result;
+            }
+            foreach (var item in raw)
+            {
+                string bare = (item ?? "").Trim().Trim('(', ')', ' ');
+                if (bare.Length == 0) continue;
+                result.Add(isQ ? bare : $"({bare})");
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 🆕 V20261017 规则2：强赌。
+        /// 对 QBettingCombos/QPBettingCombos 中不在本轮待平仓列表里的组合，
+        /// 以 EATBetInfos（我方赌单的对手盘）中该组合的最低水折 + 1 强行下赌注。
+        /// </summary>
+        private void ForceBetByDeadline(List<string> forceBetCombos, List<BetInfo> EATBetInfos, string type)
+        {
+            _Log.LogInfo($"[强赌][{type}] 本轮强赌候选[{forceBetCombos.Count}]个: [{string.Join(", ", forceBetCombos)}]");
+            Parallel.ForEach(forceBetCombos, new ParallelOptions { MaxDegreeOfParallelism = MaxComboParallelism }, comboKey =>
+            {
+                ForceBetOneCombo(comboKey, EATBetInfos, type);
+            });
+        }
+
+        private void ForceBetOneCombo(string comboKey, List<BetInfo> EATBetInfos, string type)
+        {
+            string dictKey = ComboTradeState.BuildDictKey(_Config.CurrentRaceNo, type, comboKey);
+            // 复用 AutoBetProcess 同一把按 dictKey 分片的下注锁，强赌与正常下注互斥。
+            object betLock = _betLocks.GetOrAdd(dictKey, _ => new object());
+            lock (betLock)
+            {
+                string intentId = null;
+                ComboTradeState comboState = null;
+                try
+                {
+                    if (!TryGetTradeTimeContextForClose(DateTime.Now, out _, out _, out DateTime closeStartTime, out DateTime closeEndTime) ||
+                        DateTime.Now < closeStartTime || DateTime.Now >= closeEndTime)
+                    {
+                        _logger.Debug($"[强赌][{dictKey}] 已离开强平窗口，跳过。");
+                        return;
+                    }
+
+                    // -------------------------------------------------------------
+                    // 防重复：强平定时器约 5 秒一轮，必须保证同一组合不会被反复强赌。
+                    //   - 已有赌注挂单/预占：上一笔强赌还在途，等服务器快照核实。
+                    //   - 已有吃注挂单：状态未稳定，本轮不动。
+                    //   - 已有未平赌注敞口：说明已持有赌注（正常情况下它会出现在待平仓列表中，
+                    //     被规则1 保留），无需再强赌。
+                    // 一旦强赌成交，下一轮该组合会进入待平仓列表，由规则1 保留，不会再次强赌。
+                    // -------------------------------------------------------------
+                    if (_Config.TradeStateStore.TryGet(dictKey, out var state) && state != null)
+                    {
+                        if (state.EffectiveBetPending > AmountEpsilon)
+                        {
+                            _logger.Debug($"[强赌][{dictKey}] 已有赌注挂单/预占 EffectiveBetPending={state.EffectiveBetPending:F3}，跳过。");
+                            return;
+                        }
+                        if (state.EffectiveEatPending > AmountEpsilon)
+                        {
+                            _logger.Debug($"[强赌][{dictKey}] 已有吃注挂单 EffectiveEatPending={state.EffectiveEatPending:F3}，跳过。");
+                            return;
+                        }
+                        double openBetExposure = _decisionEngine.GetRemainingEatAmount(state);
+                        if (openBetExposure > AmountEpsilon)
+                        {
+                            _logger.Debug($"[强赌][{dictKey}] 已持有未平赌注敞口[{openBetExposure:F3}]，无需强赌。");
+                            return;
+                        }
+                    }
+
+                    // 取 EAT 侧（我方赌单的对手盘）该组合的最低水折
+                    var bestQuote = (EATBetInfos ?? new List<BetInfo>())
+                        .Where(b => string.Equals(comboKey, b.combo))
+                        .MinBy(b => b.odds);
+                    if (bestQuote == null)
+                    {
+                        _Log.LogInfo($"[强赌][{type}][{comboKey}] EATBetInfos 中无该组合报价，本轮不强赌。");
+                        return;
+                    }
+
+                    int minOdds = bestQuote.odds;
+                    if (minOdds < ForceBetFloorOdds)
+                    {
+                        _Log.LogInfo($"[强赌][{type}][{comboKey}] EAT 侧最低水折[{minOdds}] < {ForceBetFloorOdds}，跳过。");
+                        return;
+                    }
+                    int forceOdds = minOdds + 1;
+
+                    bool isQStake = string.Equals(type, "Q");
+                    int configStakeAmount = isQStake ? _Config.QStakeAmount : _Config.QPStakeAmount;
+                    if (configStakeAmount <= 0)
+                    {
+                        _logger.Warn($"[强赌][{dictKey}] 下注金额配置无效[{configStakeAmount}]，跳过。");
+                        return;
+                    }
+
+                    comboState = _Config.TradeStateStore.GetOrCreate(_Config.CurrentRaceNo, type, comboKey);
+                    intentId = comboState.ReserveBetIntent(configStakeAmount, TimeSpan.FromSeconds(60));
+
+                    if (DateTime.Now >= closeEndTime)
+                    {
+                        comboState.ReleaseBetIntent(intentId);
+                        intentId = null;
+                        _logger.Debug($"[强赌][{dictKey}] 发送前已超过强平窗口结束时间[{closeEndTime:HH:mm:ss}]，取消本次强赌。");
+                        return;
+                    }
+
+                    // 复制报价对象，不修改 EATBetInfos 里的共享实例。
+                    // action="EAT" → ExecuteTrade 中 trade_type = "BET"，col_name = "{type}_EAT"，
+                    // 与 AutoBetProcess 正常下赌注的参数口径一致。
+                    BetInfo forceBetInfo = new BetInfo(bestQuote)
+                    {
+                        odds = forceOdds,
+                        stakeAmount = configStakeAmount,
+                        action = "EAT"
+                    };
+                    var pendingInfo = new EatBetInfo
+                    {
+                        raceDate = _Config.CurrentRaceDate,
+                        raceType = _Config.CurrentRaceType,
+                        raceNo = _Config.CurrentRaceNo,
+                        type = type,
+                        combo = comboKey,
+                        betPendingAmount = configStakeAmount,
+                        totalBetAmount = configStakeAmount,
+                        betOdds = forceOdds
+                    };
+                    JObject result = ExecuteTrade(pendingInfo, forceBetInfo, "M", "SO");
+
+                    // 与强平/正常下注一致的预占处理口径。
+                    if (!IsOrderAccepted(result))
+                    {
+                        if (result == null)
+                        {
+                            _logger.Warn($"[强赌][{dictKey}] 请求异常（网络超时/连接失败/响应解析失败），保留预占等待服务器快照核实，避免重复下单。");
+                        }
+                        else
+                        {
+                            string rejectMsg = result["message"]?.ToString() ?? "未知拒绝原因";
+                            comboState.ReleaseBetIntent(intentId);
+                            _logger.Warn($"[强赌][{dictKey}] 被服务器明确拒绝: {rejectMsg}，释放预占，下一轮重新判断。");
+                        }
+                    }
+                    intentId = null; // 预占已交由上面的结果处理接管
+
+                    _Log.LogInfo($"[强赌][{type}][{comboKey}] EAT侧最低水折[{minOdds}] → 下赌注水折[{forceOdds}][本次赌{configStakeAmount}] 结果[{(IsOrderAccepted(result) ? "接受" : (result == null ? "未知" : "拒绝"))}]");
+                }
+                catch (Exception ex)
+                {
+                    if (intentId != null && comboState != null)
+                    {
+                        comboState.ReleaseBetIntent(intentId);
+                    }
+                    _logger.Error($"[ForceBetByDeadline] 处理 combo [{comboKey}] 异常: {ex.Message}", ex);
+                }
+            }
         }
         // 辅助方法：把重复的下注和日志逻辑抽离出来
         /// <summary>
@@ -3745,6 +3998,9 @@ namespace AutoHorseRace
                 _Config.TradeStateStore.ClearRace(_Config.CurrentRaceNo); // 只清上一场
                 _betLocks?.Clear();
                 _eatLocks?.Clear();
+                // 🆕 V20261011_BET_TIMEOUT：首次下注时间同样按场次清理，避免上一场的
+                // 下注时间戳残留到新一场、误判成新一场也已经"下注超时"。
+                _firstBetTime?.Clear();
                 _Log.LogInfo("上一场的 LastOdds、comboLocks、本地防重缓存、挂单全集及并发锁已全部清理完成。");
                 // 🔧 V20260919_AUTOTONEXTRACE_UI_FREEZE_FIX：修复"程序运行中会卡死"的另一个根因——
                 // 原来 HTTPHelper.queryRaceInfo(...) 这个网络请求是直接写在 this.Invoke(...) 的委托里面
@@ -4349,6 +4605,32 @@ namespace AutoHorseRace
         private void checkBoxAutoRefreshBetting_CheckedChanged(object sender, EventArgs e)
         {
             _Config.AutoRefreshBetting = checkBoxAutoRefreshBetting.Checked;
+        }
+
+        private void buttonOpenQBettingSelector_Click(object sender, EventArgs e)
+        {
+            // 传入当前文本框里已有的内容，以及当前赛事的最大马匹数（比如 14）
+            using (var selectorForm = new ComboSelectorForm(textBoxQBettingCombos.Text, "Q", maxHorseNo: 14))
+            {
+                if (selectorForm.ShowDialog(this) == DialogResult.OK)
+                {
+                    // 用户点击了确定，将子窗体选择好的规范字符串赋回给主界面的输入框
+                    textBoxQBettingCombos.Text = selectorForm.SelectedCombosResult;
+                }
+            }
+        }
+
+        private void buttonbuttonOpenQPBettingSelector_Click(object sender, EventArgs e)
+        {
+            // 传入当前文本框里已有的内容，以及当前赛事的最大马匹数（比如 14）
+            using (var selectorForm = new ComboSelectorForm(textBoxQPBettingCombos.Text, "QP", maxHorseNo: 14))
+            {
+                if (selectorForm.ShowDialog(this) == DialogResult.OK)
+                {
+                    // 用户点击了确定，将子窗体选择好的规范字符串赋回给主界面的输入框
+                    textBoxQPBettingCombos.Text = selectorForm.SelectedCombosResult;
+                }
+            }
         }
     }
 }

@@ -26,9 +26,9 @@ namespace uClient
         public void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
-            System.Windows.Forms.DataGridViewCellStyle dataGridViewCellStyle1 = new System.Windows.Forms.DataGridViewCellStyle();
-            System.Windows.Forms.DataGridViewCellStyle dataGridViewCellStyle2 = new System.Windows.Forms.DataGridViewCellStyle();
-            System.Windows.Forms.DataGridViewCellStyle dataGridViewCellStyle3 = new System.Windows.Forms.DataGridViewCellStyle();
+            System.Windows.Forms.DataGridViewCellStyle dataGridViewCellStyle4 = new System.Windows.Forms.DataGridViewCellStyle();
+            System.Windows.Forms.DataGridViewCellStyle dataGridViewCellStyle5 = new System.Windows.Forms.DataGridViewCellStyle();
+            System.Windows.Forms.DataGridViewCellStyle dataGridViewCellStyle6 = new System.Windows.Forms.DataGridViewCellStyle();
             this.groupBox2 = new System.Windows.Forms.GroupBox();
             this.lblMT4Speed = new System.Windows.Forms.Label();
             this.lblMT4AskDiff4 = new System.Windows.Forms.Label();
@@ -81,7 +81,6 @@ namespace uClient
             this.textBox_UserCode = new System.Windows.Forms.TextBox();
             this.label1 = new System.Windows.Forms.Label();
             this.tabPage6 = new System.Windows.Forms.TabPage();
-            this.checkBox_EA = new System.Windows.Forms.CheckBox();
             this.checkBox_Event = new System.Windows.Forms.CheckBox();
             this.numericUpDown_QuotaCheck = new System.Windows.Forms.NumericUpDown();
             this.label5 = new System.Windows.Forms.Label();
@@ -167,7 +166,6 @@ namespace uClient
             this.nudBuyOpen = new System.Windows.Forms.NumericUpDown();
             this.nudBuyLots = new System.Windows.Forms.NumericUpDown();
             this.chkBuyOpen = new System.Windows.Forms.CheckBox();
-            this.timerEA = new System.Windows.Forms.Timer(this.components);
             this.groupBox2.SuspendLayout();
             this.tabControl1.SuspendLayout();
             this.tabPage1.SuspendLayout();
@@ -870,7 +868,6 @@ namespace uClient
             // 
             // tabPage6
             // 
-            this.tabPage6.Controls.Add(this.checkBox_EA);
             this.tabPage6.Controls.Add(this.checkBox_Event);
             this.tabPage6.Controls.Add(this.numericUpDown_QuotaCheck);
             this.tabPage6.Controls.Add(this.label5);
@@ -891,17 +888,6 @@ namespace uClient
             this.tabPage6.TabIndex = 3;
             this.tabPage6.Text = "锁单设置";
             this.tabPage6.UseVisualStyleBackColor = true;
-            // 
-            // checkBox_EA
-            // 
-            this.checkBox_EA.AutoSize = true;
-            this.checkBox_EA.Location = new System.Drawing.Point(421, 39);
-            this.checkBox_EA.Name = "checkBox_EA";
-            this.checkBox_EA.Size = new System.Drawing.Size(44, 23);
-            this.checkBox_EA.TabIndex = 51;
-            this.checkBox_EA.Text = "EA";
-            this.checkBox_EA.UseVisualStyleBackColor = true;
-            this.checkBox_EA.CheckedChanged += new System.EventHandler(this.checkBox_EA_CheckedChanged);
             // 
             // checkBox_Event
             // 
@@ -1667,32 +1653,32 @@ namespace uClient
             this.gvPositions.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.AllCells;
             this.gvPositions.BackgroundColor = System.Drawing.SystemColors.Control;
             this.gvPositions.BorderStyle = System.Windows.Forms.BorderStyle.None;
-            dataGridViewCellStyle1.Alignment = System.Windows.Forms.DataGridViewContentAlignment.MiddleLeft;
-            dataGridViewCellStyle1.BackColor = System.Drawing.SystemColors.ControlLight;
-            dataGridViewCellStyle1.Font = new System.Drawing.Font("SimSun", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            dataGridViewCellStyle1.ForeColor = System.Drawing.SystemColors.WindowText;
-            dataGridViewCellStyle1.SelectionForeColor = System.Drawing.SystemColors.HighlightText;
-            dataGridViewCellStyle1.WrapMode = System.Windows.Forms.DataGridViewTriState.True;
-            this.gvPositions.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle1;
+            dataGridViewCellStyle4.Alignment = System.Windows.Forms.DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle4.BackColor = System.Drawing.SystemColors.ControlLight;
+            dataGridViewCellStyle4.Font = new System.Drawing.Font("SimSun", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            dataGridViewCellStyle4.ForeColor = System.Drawing.SystemColors.WindowText;
+            dataGridViewCellStyle4.SelectionForeColor = System.Drawing.SystemColors.HighlightText;
+            dataGridViewCellStyle4.WrapMode = System.Windows.Forms.DataGridViewTriState.True;
+            this.gvPositions.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle4;
             this.gvPositions.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dataGridViewCellStyle2.Alignment = System.Windows.Forms.DataGridViewContentAlignment.MiddleLeft;
-            dataGridViewCellStyle2.BackColor = System.Drawing.SystemColors.Window;
-            dataGridViewCellStyle2.Font = new System.Drawing.Font("SimSun", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            dataGridViewCellStyle2.ForeColor = System.Drawing.SystemColors.ControlText;
-            dataGridViewCellStyle2.SelectionBackColor = System.Drawing.Color.Transparent;
-            dataGridViewCellStyle2.SelectionForeColor = System.Drawing.SystemColors.HighlightText;
-            dataGridViewCellStyle2.WrapMode = System.Windows.Forms.DataGridViewTriState.False;
-            this.gvPositions.DefaultCellStyle = dataGridViewCellStyle2;
+            dataGridViewCellStyle5.Alignment = System.Windows.Forms.DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle5.BackColor = System.Drawing.SystemColors.Window;
+            dataGridViewCellStyle5.Font = new System.Drawing.Font("SimSun", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            dataGridViewCellStyle5.ForeColor = System.Drawing.SystemColors.ControlText;
+            dataGridViewCellStyle5.SelectionBackColor = System.Drawing.Color.Transparent;
+            dataGridViewCellStyle5.SelectionForeColor = System.Drawing.SystemColors.HighlightText;
+            dataGridViewCellStyle5.WrapMode = System.Windows.Forms.DataGridViewTriState.False;
+            this.gvPositions.DefaultCellStyle = dataGridViewCellStyle5;
             this.gvPositions.EnableHeadersVisualStyles = false;
             this.gvPositions.Location = new System.Drawing.Point(5, 339);
             this.gvPositions.Margin = new System.Windows.Forms.Padding(4);
             this.gvPositions.MultiSelect = false;
             this.gvPositions.Name = "gvPositions";
-            dataGridViewCellStyle3.Alignment = System.Windows.Forms.DataGridViewContentAlignment.MiddleLeft;
-            dataGridViewCellStyle3.BackColor = System.Drawing.SystemColors.Control;
-            dataGridViewCellStyle3.Font = new System.Drawing.Font("SimSun", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            dataGridViewCellStyle3.WrapMode = System.Windows.Forms.DataGridViewTriState.True;
-            this.gvPositions.RowHeadersDefaultCellStyle = dataGridViewCellStyle3;
+            dataGridViewCellStyle6.Alignment = System.Windows.Forms.DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle6.BackColor = System.Drawing.SystemColors.Control;
+            dataGridViewCellStyle6.Font = new System.Drawing.Font("SimSun", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            dataGridViewCellStyle6.WrapMode = System.Windows.Forms.DataGridViewTriState.True;
+            this.gvPositions.RowHeadersDefaultCellStyle = dataGridViewCellStyle6;
             this.gvPositions.RowHeadersVisible = false;
             this.gvPositions.RowTemplate.Height = 23;
             this.gvPositions.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
@@ -2043,11 +2029,6 @@ namespace uClient
             this.chkBuyOpen.UseVisualStyleBackColor = true;
             this.chkBuyOpen.CheckedChanged += new System.EventHandler(this.chkBuyOpen_CheckedChanged);
             // 
-            // timerEA
-            // 
-            this.timerEA.Interval = 30000;
-            this.timerEA.Tick += new System.EventHandler(this.timerEA_Tick);
-            // 
             // TradeForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
@@ -2264,8 +2245,6 @@ namespace uClient
         public System.Windows.Forms.CheckBox checkBox_Event;
         public System.Windows.Forms.TextBox textBox_eventConfig;
         public System.Windows.Forms.Label label9;
-        private System.Windows.Forms.Timer timerEA;
-        public System.Windows.Forms.CheckBox checkBox_EA;
 
         /// <summary>
         /// 设计器默认设置components为private,由于子类需要管理该Object,通过重新定义一个属性或字段访问
