@@ -1,18 +1,34 @@
 ﻿using NetMQ;
+using NetMQ.Sockets;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 using uClient.Comm;
 
 namespace uClient.Broker
 {
     public partial class AutoTradeClientForm : uClient.TradeForm
     {
-        // 心跳内容最后一次变化时的本机时间；不依赖策略端与本机时钟同步
+        // EA 心跳状态统一由 AutoTradeClientForm 管理。
+        // 时间均使用本机接收时间，不依赖 EA 服务器时钟同步。
         private string _lastHeartbeatText = string.Empty;
-        private DateTime _lastHeartbeatChangedAt = DateTime.MinValue;
+        private DateTime _lastHeartbeatReceivedAt = DateTime.MinValue;
+        private DateTime _marketQuoteStartedAt = DateTime.MinValue;
+        private bool _firstHeartbeatReceived = false;
+        private bool _heartbeatTimeoutHandled = false;
+
+        // BackgroundWorker 与 NetMQ SUB socket 生命周期同步。
+        // SubscriberSocket 只由 MarketQuote worker 创建、连接、接收和释放。
+        private readonly object _marketQuoteLifecycleLock = new object();
+        private readonly ManualResetEventSlim _marketQuoteStopped = new ManualResetEventSlim(true);
+        private volatile bool _marketQuoteStopRequested = false;
+        private string _marketQuoteEndpoint = string.Empty;
+
+        private static readonly TimeSpan FirstHeartbeatTimeout = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan RunningHeartbeatTimeout = TimeSpan.FromMinutes(3);
         /// <summary>
         /// 需要初始化平台本地变量,再赋值给父类变量
         /// </summary>
@@ -466,7 +482,9 @@ namespace uClient.Broker
                                 break;
                         }
                         //连接EA数据源
-                        if (!_IsDSConnectFlag)
+                        // _IsDSConnectFlag 在 EA 首条心跳前保持 false；
+                        // 只有 worker 已完全停止时才允许自动重连，避免连接中每个定时周期重复重启。
+                        if (_marketQuoteStopped.IsSet && !bgwMarketQuote.IsBusy)
                         {
                             DSConnection();
                         }
@@ -474,7 +492,7 @@ namespace uClient.Broker
                         if (!_EnableAutoTrade)
                         {
                             //启动自动交易
-                            if (isConnect() && _IsDSConnectFlag)
+                            if (isConnect() && IsDataSourceReady())
                             {
                                 StartAutoTrade();
                                 //启动自动交易成功
@@ -484,16 +502,9 @@ namespace uClient.Broker
                     }
                 }
 
-                // 心跳文本连续3分钟没有变化，使用本机计时判断策略连接状态
-                if (string.Equals(_Config.DSType, "EA") &&
-                    _IsDSConnectFlag &&
-                    _lastHeartbeatChangedAt != DateTime.MinValue &&
-                    DateTime.Now - _lastHeartbeatChangedAt > TimeSpan.FromMinutes(3))
-                {
-                    _Log.LogInfo("策略心跳文本超过3分钟未变化，调用DSDisconnect断开连接");
-                    DSDisconnect();
-                    _Log.LogInfo("策略自动断开连接");
-                }
+                // 首次心跳等待超时（30秒）或运行中心跳丢失（3分钟）。
+                // 不比较心跳文本是否变化；只要收到有效心跳，每次都刷新接收时间。
+                CheckHeartbeatTimeout();
             }
         }
         /// <summary>
@@ -507,12 +518,11 @@ namespace uClient.Broker
             {
                 if (buttonDSConnect.Text.Equals("数据源连接"))
                 {
-                    _IsDSConnectFlag = DSConnection();
+                    DSConnection();
                 }
                 else if (buttonDSConnect.Text.Equals("数据源断开"))
                 {
                     DSDisconnect();
-                    _IsDSConnectFlag = false;
                 }
             });
         }
@@ -525,269 +535,464 @@ namespace uClient.Broker
         /// <returns></returns>
         public override bool DSConnection()
         {
-            string dsAddress = _Config.PublishAddressT4;
-            //连接之前先断连,避免出现端口被占用情况
-            if (string.Equals("EA", _Config.DSType))
+            string dsAddress = GetDataSourceAddress();
+            if (string.IsNullOrWhiteSpace(dsAddress))
             {
-                dsAddress = _Config.PublishAddressEA;
+                _Log.LogInfo(string.Format("{0}服务器地址未配置", _Config.DSType));
+                return false;
             }
-            if (string.Equals("T4", _Config.DSType))
-            {
-                dsAddress = _Config.PublishAddressT4;
-            }
-            if (string.Equals("OEC", _Config.DSType))
-            {
-                dsAddress = _Config.PublishAddressOEC;
-            }
-            if (dsAddress.Contains("127.0.0.1"))
-            {
-                dsAddress = dsAddress.Replace("127.0.0.1", uClient.Comm.Utils.GetLocalIP());
-            }
+
+            // 本次连接前先请求旧接收循环退出，并等待它释放 socket。
             DSDisconnect();
-            _Log.LogInfo(string.Format("连接到{0}服务器：{1}", _Config.DSType, dsAddress));
-            try
+
+            if (!WaitForMarketQuoteStopped(TimeSpan.FromSeconds(8)))
             {
-                if (dsAddress == null || dsAddress == "")
+                _Log.LogInfo("[DS][CONNECT_ABORT] 等待旧 MarketQuote/BackgroundWorker 完全退出超时，取消本次重连");
+                return false;
+            }
+
+            lock (_marketQuoteLifecycleLock)
+            {
+                if (bgwMarketQuote.IsBusy)
                 {
-                    MessageBox.Show(string.Format("{0}服务器地址未配置", _Config.DSType));
+                    _Log.LogInfo("[DS][CONNECT_ABORT] BackgroundWorker 仍处于 Busy，拒绝重复启动");
                     return false;
                 }
-                _Subscriber.Options.TcpKeepalive = true;
-                _Subscriber.Options.TcpKeepaliveIdle = new TimeSpan(5, 0, 0);
-                _Subscriber.Options.TcpKeepaliveInterval = new TimeSpan(0, 0, 1);
-                _Subscriber.Connect(dsAddress);
-                _Subscriber.Subscribe("");
-                buttonDSConnect.Text = "数据源断开";
-                buttonDSConnect.BackColor = Color.Green;
-                label_DSName.Text = _Config.DSType;
-                label_Price_Connect.Text = "已连接";
-                label_Price_Connect.BackColor = Color.Green;
-                _IsDSConnectFlag = true;
-                _lastHeartbeatText = string.Empty;
-                _lastHeartbeatChangedAt = DateTime.Now;
-                if (bgwMarketQuote.IsBusy != true)
+
+                try
                 {
-                    bgwMarketQuote.RunWorkerAsync();
+                    _marketQuoteEndpoint = dsAddress;
+                    _marketQuoteStopRequested = false;
+                    _IsDSConnectFlag = false;
+
+                    lock (_marketQuoteLifecycleLock)
+                    {
+                        _firstHeartbeatReceived = false;
+                        _heartbeatTimeoutHandled = false;
+                        _lastHeartbeatText = string.Empty;
+                        _lastHeartbeatReceivedAt = DateTime.MinValue;
+                        _marketQuoteStartedAt = DateTime.Now;
+                    }
+
+                    _Log.LogInfo(string.Format("连接到{0}服务器：{1}", _Config.DSType, dsAddress));
+
+                    // NetMQ socket 在本类中由接收线程独占。
+                    // 这里仅保存 endpoint 并启动 worker，Connect 在 MarketQuote 内执行。
+                    _marketQuoteStopped.Reset();
+                    try
+                    {
+                        bgwMarketQuote.RunWorkerAsync();
+                    }
+                    catch
+                    {
+                        _marketQuoteStopped.Set();
+                        throw;
+                    }
+
+                    buttonDSConnect.Text = "数据源断开";
+                    buttonDSConnect.BackColor = Color.Green;
+                    label_DSName.Text = _Config.DSType;
+                    label_Price_Connect.Text = "连接中";
+                    label_Price_Connect.BackColor = Color.Orange;
+                    _IsDSConnectFlag = false; // worker 启动不代表数据源就绪；EA 必须等待首条有效心跳。
+
+                    _Log.LogInfo("[DS][CONNECT_START] MarketQuote worker 已启动，等待数据源就绪");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    _IsDSConnectFlag = false;
+                    _marketQuoteStopped.Set();
+                    _logger.Error(ex, "DSConnection 启动失败");
+                    _Log.LogInfo(string.Format("连接到{0}服务器时错误：{1}", _Config.DSType, ex.Message));
+                    return false;
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.Error(ex.Message + "  " + ex.StackTrace);
-                _Log.LogInfo(string.Format("连接到{0}服务器时错误：{1}", _Config.DSType, ex.Message));
-            }
-            return true;
         }
+
         /// <summary>
-        /// 断开数据源连接
+        /// 等待接收循环释放 socket，并等待 BackgroundWorker 完成状态切换。
+        /// MarketQuote 的 finally 会先释放 socket，再设置 _marketQuoteStopped；
+        /// BackgroundWorker 的 IsBusy 则在 DoWork/RunWorkerCompleted 生命周期结束后才会变为 false。
+        /// </summary>
+        private bool WaitForMarketQuoteStopped(TimeSpan timeout)
+        {
+            DateTime deadline = DateTime.UtcNow + timeout;
+
+            while (DateTime.UtcNow < deadline)
+            {
+                if (_marketQuoteStopped.IsSet && !bgwMarketQuote.IsBusy)
+                    return true;
+
+                Thread.Sleep(50);
+            }
+
+            return _marketQuoteStopped.IsSet && !bgwMarketQuote.IsBusy;
+        }
+
+        /// <summary>
+        /// 获取当前数据源 endpoint。
+        /// </summary>
+        private string GetDataSourceAddress()
+        {
+            string dsAddress = string.Empty;
+
+            if (string.Equals(_Config.DSType, "EA", StringComparison.OrdinalIgnoreCase))
+                dsAddress = _Config.PublishAddressEA;
+            else if (string.Equals(_Config.DSType, "T4", StringComparison.OrdinalIgnoreCase))
+                dsAddress = _Config.PublishAddressT4;
+            else if (string.Equals(_Config.DSType, "OEC", StringComparison.OrdinalIgnoreCase))
+                dsAddress = _Config.PublishAddressOEC;
+
+            if (!string.IsNullOrWhiteSpace(dsAddress) && dsAddress.Contains("127.0.0.1"))
+                dsAddress = dsAddress.Replace("127.0.0.1", uClient.Comm.Utils.GetLocalIP());
+
+            return dsAddress;
+        }
+
+        /// <summary>
+        /// 请求数据源接收循环停止。
+        /// 不在 UI/timer 线程操作 NetMQ socket，避免跨线程访问 socket。
         /// </summary>
         public override void DSDisconnect()
         {
-            string dsAddress = _Config.PublishAddressT4;
-            if (string.Equals("T4", _Config.DSType))
-            {
-                dsAddress = _Config.PublishAddressT4;
-            }
-            if (string.Equals("OEC", _Config.DSType))
-            {
-                dsAddress = _Config.PublishAddressOEC;
-            }
-            if (string.Equals("EA", _Config.DSType))
-            {
-                dsAddress = _Config.PublishAddressEA;
-            }
-            if (dsAddress.Contains("127.0.0.1"))
-            {
-                dsAddress = dsAddress.Replace("127.0.0.1", uClient.Comm.Utils.GetLocalIP());
-            }
+            string dsAddress = GetDataSourceAddress();
             _Log.LogInfo(string.Format("断开{0}服务器：{1}", _Config.DSType, dsAddress));
+
+            _IsDSConnectFlag = false;
+            _marketQuoteStopRequested = true;
+            lock (_marketQuoteLifecycleLock)
+            {
+                _firstHeartbeatReceived = false;
+                _lastHeartbeatReceivedAt = DateTime.MinValue;
+                _marketQuoteStartedAt = DateTime.MinValue;
+                _heartbeatTimeoutHandled = false;
+            }
+
+            if (bgwMarketQuote.IsBusy && !bgwMarketQuote.CancellationPending)
+            {
+                try
+                {
+                    bgwMarketQuote.CancelAsync();
+                }
+                catch (Exception ex)
+                {
+                    _Log.LogInfo("[DS][CANCEL_ERROR] " + ex.Message);
+                }
+            }
+
+            // TryReceiveFrameString 使用 1 秒超时，正常情况下 worker 会很快退出。
+            // 不在这里 Disconnect socket；由 MarketQuote 的 finally 在 socket 所属线程释放。
+            if (!WaitForMarketQuoteStopped(TimeSpan.FromSeconds(8)))
+            {
+                _Log.LogInfo("[DS][DISCONNECT_WAIT_TIMEOUT] MarketQuote/BackgroundWorker 尚未完全退出；后续重连必须等待旧 worker 完成");
+            }
+
             buttonDSConnect.Text = "数据源连接";
             buttonDSConnect.BackColor = Color.Red;
             label_Price_Connect.Text = "未连接";
             label_Price_Connect.BackColor = Color.Red;
-            _IsDSConnectFlag = false;
-            try
-            {
-                // 🔧 V20260927_DISCONNECT_NOT_UNBIND：日志里实测抛出了
-                // NetMQ.EndpointNotFoundException: "Endpoint was not found and cannot
-                // be disconnected"，根因是 Connect/Disconnect 和 Bind/Unbind 在 NetMQ
-                // 里是两套不对称的配对操作：DSConnection() 里用的是 _Subscriber.Connect(dsAddress)
-                // 建立的连接，这里却用 Unbind(dsAddress) 去撤销——Unbind 撤销的是 Bind 建立的
-                // 监听端点，这个地址上根本没有 Bind 过，所以必然抛异常。
-                // 更关键的是：这个异常被 catch 吞掉只打了一行日志，Unbind 失败意味着
-                // Connect() 建立的那个连接其实从来没有被真正断开过——socket 内部仍然保持着
-                // 到旧地址的连接。紧接着 DSConnection() 又会 Connect() 一个新地址，
-                // 这样一个 SUB socket 可能同时连着新旧两个地址，导致"重连"之后仍然会
-                // 收到旧服务器的消息（或者旧连接一直占着，行为不可预期）——这和之前
-                // MarketQuote() 接收循环卡死的问题是两个独立的根因，都会造成"看起来断线
-                // 重连了，但实际状态没有真正清干净"的现象，建议一起修。
-                _Subscriber.Disconnect(dsAddress);
-                _Log.LogInfo("取消连接");
-            }
-            catch (Exception e)
-            {
-                _Log.LogInfo("取消连接," + e.Message);
-            }
-            // 🔧 V20260927_MARKETQUOTE_CANCELLABLE_RECEIVE：
-            // 之前 MarketQuote() 循环里用的是无超时、不可取消的 ReceiveFrameString()，
-            // CancelAsync() 只是设置了 CancellationPending=true，但循环从来没检查过，
-            // 所以这一行调用本身其实从来没有真正让后台线程退出过（见下方 MarketQuote 方法
-            // 处的详细说明）。现在 MarketQuote() 循环已经会在每次超时轮询时检查
-            // CancellationPending 并正常退出，这里的 CancelAsync() 才算真正生效。
-            bgwMarketQuote.CancelAsync();
+
             ClearDSDiff();
             StopAutoTrade();
         }
+
+        /// <summary>
+        /// EA 数据源就绪条件：必须已经收到首条有效心跳。
+        /// 非 EA 数据源沿用 socket 连接成功即就绪的规则。
+        /// </summary>
+        protected override bool IsDataSourceReady()
+        {
+            if (!string.Equals(_Config.DSType, "EA", StringComparison.OrdinalIgnoreCase))
+                return _IsDSConnectFlag;
+
+            lock (_marketQuoteLifecycleLock)
+            {
+                return _IsDSConnectFlag && _firstHeartbeatReceived;
+            }
+        }
+
+        /// <summary>
+        /// 处理 EA 心跳。当前协议沿用原代码：普通心跳文本的第二个空格分隔字段为心跳内容。
+        /// XAUUSD 行情和 GS 策略消息不作为心跳。
+        /// </summary>
+        private bool ProcessEAHeartbeat(string message)
+        {
+            if (_marketQuoteStopRequested ||
+                string.IsNullOrWhiteSpace(message) ||
+                message.Contains("XAUUSD:") ||
+                message.StartsWith("GS:", StringComparison.Ordinal))
+                return false;
+
+            string[] parts = message.Split(
+                new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length < 2 || string.IsNullOrWhiteSpace(parts[1]))
+            {
+                SetPriceConnectStatus("等待有效心跳", Color.Orange);
+                return false;
+            }
+
+            DateTime now = DateTime.Now;
+            bool firstHeartbeat = false;
+            string heartbeatText = parts[1];
+
+            lock (_marketQuoteLifecycleLock)
+            {
+                // 断开请求可能与当前接收帧并发发生，禁止断开后重新置为就绪。
+                if (_marketQuoteStopRequested)
+                    return false;
+
+                _lastHeartbeatReceivedAt = now;
+
+                if (!_firstHeartbeatReceived)
+                {
+                    _firstHeartbeatReceived = true;
+                    firstHeartbeat = true;
+                }
+
+                if (!string.Equals(_lastHeartbeatText, heartbeatText, StringComparison.Ordinal))
+                    _lastHeartbeatText = heartbeatText;
+
+                _heartbeatTimeoutHandled = false;
+            }
+
+            if (firstHeartbeat)
+            {
+                _IsDSConnectFlag = true;
+                _Log.LogInfo("[DS][HEARTBEAT_READY] 已收到 EA 首条有效心跳，数据源正式就绪");
+            }
+
+            SetPriceConnectStatus(heartbeatText, Color.Green);
+            return true;
+        }
+
+        /// <summary>
+        /// 由 UI 定时器调用，检查首条心跳等待超时及运行中心跳超时。
+        /// </summary>
+        private void CheckHeartbeatTimeout()
+        {
+            if (!string.Equals(_Config.DSType, "EA", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            bool shouldDisconnect = false;
+            string reason = string.Empty;
+            DateTime now = DateTime.Now;
+
+            lock (_marketQuoteLifecycleLock)
+            {
+                if (_marketQuoteStartedAt == DateTime.MinValue || _heartbeatTimeoutHandled)
+                    return;
+
+                if (!_firstHeartbeatReceived &&
+                    now - _marketQuoteStartedAt > FirstHeartbeatTimeout)
+                {
+                    shouldDisconnect = true;
+                    reason = "启动后30秒未收到首条有效EA心跳";
+                }
+                else if (_firstHeartbeatReceived &&
+                         _lastHeartbeatReceivedAt != DateTime.MinValue &&
+                         now - _lastHeartbeatReceivedAt > RunningHeartbeatTimeout)
+                {
+                    shouldDisconnect = true;
+                    reason = "连续3分钟未收到有效EA心跳";
+                }
+
+                if (shouldDisconnect)
+                    _heartbeatTimeoutHandled = true;
+            }
+
+            if (shouldDisconnect)
+            {
+                _Log.LogInfo("[DS][HEARTBEAT_TIMEOUT] " + reason + "，停止自动交易并断开数据源");
+                DSDisconnect();
+            }
+        }
+
         /// <summary>
         /// 策略数据分析是否运行
         /// </summary>
         public bool _EAAnalysisRunning = false;
+        /// <summary>
+        /// 从行情接收线程安全更新数据源连接状态控件。
+        /// </summary>
+        private void SetPriceConnectStatus(string text, Color backColor)
+        {
+            if (label_Price_Connect == null || label_Price_Connect.IsDisposed)
+                return;
+
+            if (label_Price_Connect.InvokeRequired)
+            {
+                try
+                {
+                    label_Price_Connect.BeginInvoke(new Action<string, Color>(SetPriceConnectStatus), text, backColor);
+                }
+                catch (InvalidOperationException)
+                {
+                    // 窗体正在关闭或控件已释放，忽略 UI 更新。
+                }
+                return;
+            }
+
+            label_Price_Connect.Text = text;
+            label_Price_Connect.BackColor = backColor;
+        }
+
         /// <summary>
         /// 数据源行情获取并计算是否自动交易
         /// </summary>
         public override void MarketQuote()
         {
             _EAAnalysisRunning = true;
-            string PreReceiveMsg = "";
+            string PreReceiveMsg = string.Empty;
+            int timeoutHeartbeatCount = 0;
+            string endpoint = _marketQuoteEndpoint;
+            SubscriberSocket subscriber = null;
 
-            // 🆕 V20260927_MARKETQUOTE_DIAG_LOGGING：定位"完全没有接收消息日志"问题的诊断埋点。
-            // 单靠现有日志无法区分三种情况：①方法根本没被调用（RunWorkerAsync 没触发）
-            // ②方法跑起来了但循环一直超时、从没收到过消息 ③循环中途抛异常被 BackgroundWorker
-            // 静默吞掉。加上下面这几行后：完全看不到"MarketQuote 接收循环启动"这行 → 是①；
-            // 能看到启动日志、也能看到下面的心跳日志、但一直没有"接收消息："→ 是②，去查服务端
-            // 有没有真的在往这个地址发消息、Connect 的地址对不对；启动日志之后突然没有任何
-            // 日志（包括心跳）→ 是③，看 catch 块打出来的异常堆栈。
-            _Log.LogInfo("MarketQuote 接收循环启动");
-            int _timeoutHeartbeatCount = 0;
+            _Log.LogInfo("[DS][WORKER_START] MarketQuote 接收循环启动，endpoint=" + endpoint);
+
             try
             {
+                if (string.IsNullOrWhiteSpace(endpoint))
+                    throw new InvalidOperationException("MarketQuote endpoint 为空");
 
-                // 🔧 V20260927_MARKETQUOTE_CANCELLABLE_RECEIVE：
-                // 原来这里是 `string results = _Subscriber.ReceiveFrameString();`——
-                // 这是无超时、不可中途取消的阻塞调用，会一直卡到 socket 上有消息到达为止。
-                // 这不只是调试器 QuickWatch 里看到的那种"求值超时"的小麻烦，而是会引发
-                // 两个连锁的真实运行期 bug：
-                //
-                // 1) DSDisconnect() 里调用的 bgwMarketQuote.CancelAsync() 只是把
-                //    CancellationPending 置为 true，但这个 while(true) 循环从来没有
-                //    检查过这个标志——所以"取消"从来没有真正生效过，这个后台线程会
-                //    一直卡在 ReceiveFrameString() 里等下一条消息，bgwMarketQuote.IsBusy
-                //    永远是 true，直到真的有新消息把这一轮 while 循环唤醒（但唤醒后循环体
-                //    执行完还是会立刻回到 ReceiveFrameString() 继续阻塞，永远不会退出）。
-                //
-                // 2) 因为 IsBusy 永远是 true，DSConnection() 里
-                //    `if (bgwMarketQuote.IsBusy != true) { bgwMarketQuote.RunWorkerAsync(); }`
-                //    这个守卫条件在第一次连接成功、这个后台线程启动之后，就再也不会满足了。
-                //    也就是说：只要发生过一次断线重连（timerCheckPlatformConnectStatus_Tick
-                //    的自动拉起、timerRefreshAutoTrade_Tick 里 EA 地址变化触发的重连、或者
-                //    3 分钟无心跳触发的 DSDisconnect），行情接收循环就再也不会重新启动，
-                //    界面上的价格会静默停在最后一次收到的值上，不会有任何异常或日志提示。
-                //
-                // 3) 旧线程既然从未真正退出、一直卡在 _Subscriber 这个 socket 上，
-                //    DSConnection() 里又会在同一个 _Subscriber 实例上调用 Connect()——
-                //    NetMQ 的 socket 并不是设计给多线程并发访问的，一个线程卡在
-                //    ReceiveFrameString() 里，另一个线程同时去 Connect() 同一个 socket，
-                //    行为是未定义的，可能抛异常也可能让 socket 内部状态错乱。
-                //
-                // 现在改用 TryReceiveFrameString(timeout, out result)：收不到消息时最多
-                // 阻塞 3 秒就返回 false，循环借这个间隙检查一次 CancellationPending，
-                // 这样 DSDisconnect() 触发的取消才能在最多 3 秒内真正生效、线程真正退出、
-                // IsBusy 恢复 false，DSConnection() 下次才能重新启动接收循环。
+                // 每次启动接收线程时，在当前 worker 线程创建独立 SUB socket。
+                // 不再依赖父类中可能尚未初始化的 _Subscriber。
+                // NetMQ socket 必须由创建它的线程负责 Connect/Receive/Dispose。
+                subscriber = new SubscriberSocket();
+                subscriber.Options.TcpKeepalive = true;
+                subscriber.Options.TcpKeepaliveIdle = TimeSpan.FromHours(5);
+                subscriber.Options.TcpKeepaliveInterval = TimeSpan.FromSeconds(1);
+                subscriber.Connect(endpoint);
+                subscriber.Subscribe(string.Empty);
+
+                _Log.LogInfo("[DS][CONNECTED] NetMQ SUB 已连接：" + endpoint);
+
+                if (!string.Equals(_Config.DSType, "EA", StringComparison.OrdinalIgnoreCase))
+                {
+                    _IsDSConnectFlag = true;
+                    SetPriceConnectStatus("已连接", Color.Green);
+                }
+                else
+                {
+                    _IsDSConnectFlag = false;
+                    SetPriceConnectStatus("等待EA心跳", Color.Orange);
+                }
+
                 while (true)
                 {
-                    if (!_Subscriber.TryReceiveFrameString(TimeSpan.FromSeconds(3), out string results))
+                    // CancelAsync 只设置 CancellationPending，不会强制终止线程。
+                    if (_marketQuoteStopRequested || bgwMarketQuote.CancellationPending)
                     {
-                        // 每超时 120 次（约 6 分钟）打一次心跳日志，
-                        // 证明循环还活着、只是没收到消息，
-                        // 避免和"方法根本没跑起来"或"循环已经异常退出"这两种情况混淆。
-                        _timeoutHeartbeatCount++;
+                        _Log.LogInfo("[DS][CANCELLED] 收到停止请求，准备退出接收循环");
+                        break;
+                    }
 
-                        if (_timeoutHeartbeatCount % 120 == 0)
+                    string results;
+                    bool received = subscriber.TryReceiveFrameString(
+                        TimeSpan.FromSeconds(1), out results);
+
+                    // 收到消息后也再次检查取消标志，避免断开期间继续执行交易逻辑。
+                    if (_marketQuoteStopRequested || bgwMarketQuote.CancellationPending)
+                    {
+                        _Log.LogInfo("[DS][CANCELLED] 收到停止请求，丢弃当前消息并退出");
+                        break;
+                    }
+
+                    if (!received)
+                    {
+                        timeoutHeartbeatCount++;
+                        if (timeoutHeartbeatCount % 60 == 0)
                         {
                             _Log.LogInfo(string.Format(
-                                "MarketQuote 循环存活中，已连续 {0} 次超时未收到消息（约 {1} 分钟），DSType={2}",
-                                _timeoutHeartbeatCount,
-                                (_timeoutHeartbeatCount * 3) / 60,
+                                "[DS][WORKER_ALIVE] 连续 {0} 次超时未收到消息（约 {1} 分钟），DSType={2}",
+                                timeoutHeartbeatCount,
+                                timeoutHeartbeatCount / 60,
                                 _Config.DSType));
                         }
+                        continue;
+                    }
 
-                        // 3 秒内没有新消息，只是正常的超时轮询，回去再检查一次取消标志，不是错误
-                        continue;
-                    }
-                    _timeoutHeartbeatCount = 0;
-                    //_Log.LogInfo("接收消息：" + results);
-                    if (results.Equals(PreReceiveMsg) || string.IsNullOrEmpty(results))
+                    timeoutHeartbeatCount = 0;
+
+                    bool isEA = string.Equals(
+                        _Config.DSType, "EA", StringComparison.OrdinalIgnoreCase);
+
+                    // 必须先处理心跳，再做重复报文过滤；相同心跳内容也代表仍然存活。
+                    if (isEA)
+                        ProcessEAHeartbeat(results);
+
+                    if (string.IsNullOrEmpty(results) ||
+                        string.Equals(results, PreReceiveMsg, StringComparison.Ordinal))
                     {
                         continue;
                     }
-                    else
+
+                    PreReceiveMsg = results;
+
+                    if (string.Equals(_Config.DSType, "T4", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(_Config.DSType, "OEC", StringComparison.OrdinalIgnoreCase))
                     {
-                        PreReceiveMsg = results;
-                        if (string.Equals(_Config.DSType, "T4") || string.Equals(_Config.DSType, "OEC"))
+                        if (results.StartsWith("Gold", StringComparison.Ordinal))
+                            EA1(results);
+                    }
+                    else if (string.Equals(_Config.DSType, "EA", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (results.Contains("XAUUSD:"))
                         {
-                            if (results.StartsWith("Gold"))
-                            {
-                                EA1(results);
-                            }
+                            if (_TradePara.AutoTrade)
+                                EA2(results);
                         }
-                        if (string.Equals(_Config.DSType, "EA"))
+                        else if (results.StartsWith("GS:", StringComparison.Ordinal))
                         {
-                            if (results.StartsWith("XAUUSD"))
-                            {
-                                if (_TradePara.AutoTrade)
-                                {
-                                    EA2(results);
-                                }
-                            }
-                            else if (results.StartsWith("GS"))
-                            {
-                                if (_TradePara.AutoTrade)
-                                {
-                                    EA3Async(results);
-                                }
-                            }
-                            else
-                            {
-                                // 心跳文本变化时记录本机时间；不解析心跳文本中的时间
-                                string[] split = results.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                                if (split.Length < 2 || string.IsNullOrWhiteSpace(split[1]))
-                                {
-                                    label_Price_Connect.Text = "未连接";
-                                    label_Price_Connect.BackColor = Color.Red;
-                                }
-                                else
-                                {
-                                    string heartbeatText = split[1];
-                                    if (!string.Equals(heartbeatText, _lastHeartbeatText, StringComparison.Ordinal))
-                                    {
-                                        _lastHeartbeatText = heartbeatText;
-                                        _lastHeartbeatChangedAt = DateTime.Now;
-                                    }
-
-                                    label_Price_Connect.Text = heartbeatText;
-                                    label_Price_Connect.BackColor = Color.Green;
-                                }
-                            }
+                            if (_TradePara.AutoTrade)
+                                EA3Async(results);
+                        }
+                        else
+                        {
+                            // EA 心跳已在重复报文过滤之前由 ProcessEAHeartbeat 处理。
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                // 🆕 关键诊断点：之前循环体没有任何 try/catch，一旦 TryReceiveFrameString 或
-                // EA1/EA2/EA3Async 抛出未捕获异常，异常会直接从 DoWork 方法冒出去，被
-                // BackgroundWorker 捕获并塞进 RunWorkerCompletedEventArgs.Error——如果
-                // bgwMarketQuote 的 RunWorkerCompleted 事件里没检查 e.Error（多半没检查），
-                // 这个异常就会彻底消失，界面上和日志里都不会有任何提示，只会看到"接收消息："
-                // 这行日志从某个时间点开始再也不出现。加上这个 catch 后，异常至少会被记录下来，
-                // 不会再是"什么都没发生"式的静默死亡。
                 _logger.Error(ex, "MarketQuote 接收循环异常终止");
-                _Log.LogInfo("MarketQuote 接收循环异常终止：" + ex.Message);
+                _Log.LogInfo("[DS][WORKER_EXCEPTION] " + ex);
             }
-            // 🆕 循环因取消请求正常退出（或异常终止），把状态标志复位，这样 bgwMarketQuote.IsBusy
-            // 才能在 BackgroundWorker 的 RunWorkerCompleted 之后恢复 false。
-            _EAAnalysisRunning = false;
-            _Log.LogInfo("MarketQuote 接收循环已结束");
+            finally
+            {
+                // Disconnect 和 Dispose 均在 socket 创建线程执行。
+                // 即使 Connect 失败，也必须释放已经创建的 socket。
+                try
+                {
+                    if (subscriber != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(endpoint))
+                            subscriber.Disconnect(endpoint);
+
+                        subscriber.Dispose();
+                        _Log.LogInfo("[DS][SOCKET_DISPOSED] " + endpoint);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _Log.LogInfo("[DS][SOCKET_DISPOSE_ERROR] " + ex.Message);
+                }
+
+                _EAAnalysisRunning = false;
+                _IsDSConnectFlag = false;
+                lock (_marketQuoteLifecycleLock)
+                {
+                    _firstHeartbeatReceived = false;
+                    _lastHeartbeatReceivedAt = DateTime.MinValue;
+                    _marketQuoteStartedAt = DateTime.MinValue;
+                }
+                _marketQuoteStopped.Set();
+                _Log.LogInfo("[DS][WORKER_STOPPED] MarketQuote 接收循环已结束");
+            }
         }
+
         /// <summary>
         /// 时差交易策略
         /// </summary>
@@ -923,138 +1128,382 @@ namespace uClient.Broker
             //Thread.Sleep(3);
         }
         /// <summary>
-        /// EA2的公共交易参数，作为全局变量保存
+        /// EA2收到的完整策略交易记录。保留原始内容，供平台执行层记录审计信息。
         /// </summary>
-        string _EA2_TradeRecord = "";
+        private string _EA2_TradeRecord = string.Empty;
+
         /// <summary>
-        /// 对手反向交易策略
+        /// MQL5 ToLegacyCommand() 输出的 EA2 指令结构。
+        ///
+        /// 当前格式：
+        /// DETAIL SYMBOL:PRICE:OPERATION:LOT:TP:SL COMMAND_TIME TRACE...
+        ///
+        /// 示例开仓：
+        /// SELL XAUUSD:4077.30:SELL:1:15:4092.3 18:45:00 18:45:00 SELL:4077.30:-99.00:-99.00
+        ///
+        /// 示例平仓：
+        /// CLOSE_SELL_TRAILING_STOP XAUUSD:4087.23:CLOSE_SELL:1:50:50 17:41:50 17:41:50 CLOSE_SELL:4094.87:4087.23:7.64:12.67:-0.62
+        ///
+        /// 第一段 DETAIL 是策略详情；第二段中的 OPERATION 才是实际交易动作。
+        /// </summary>
+        private sealed class EA2ParsedCommand
+        {
+            public string Detail;
+            public string Symbol;
+            public double Price;
+            public string Operation;
+            public double Lots;
+            public double TakeProfit;
+            public double StopLoss;
+            public string CommandTime;
+            public string TradeTrace;
+            public int TradeType;
+        }
+
+        private static bool TryParseEA2Number(string value, out double number)
+        {
+            return double.TryParse(
+                value,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out number);
+        }
+
+        /// <summary>
+        /// 解析 MQL5 EA2 指令。
+        /// 同时兼容旧格式：SYMBOL:PRICE:OPERATION:LOT:TP:SL TIME TRACE
+        /// </summary>
+        private static bool TryParseEA2Command(
+            string results,
+            out EA2ParsedCommand command,
+            out string error)
+        {
+            command = null;
+            error = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(results))
+            {
+                error = "指令为空";
+                return false;
+            }
+
+            string[] tokens = results.Trim().Split(
+                new[] { ' ', '\t', '\r', '\n' },
+                StringSplitOptions.RemoveEmptyEntries);
+
+            if (tokens.Length < 2)
+            {
+                error = "指令字段不足，至少需要交易参数和时间";
+                return false;
+            }
+
+            string detail;
+            string transactionToken;
+            string commandTime;
+            int traceStartIndex;
+
+            // 新 MQL5 格式：DETAIL + SYMBOL:PRICE:OP:LOT:TP:SL + TIME + TRACE
+            string[] firstTokenFields = tokens[0].Split(':');
+            string[] secondTokenFields = tokens[1].Split(':');
+
+            if (tokens.Length >= 3 && secondTokenFields.Length >= 6)
+            {
+                detail = tokens[0];
+                transactionToken = tokens[1];
+                commandTime = tokens[2];
+                traceStartIndex = 3;
+            }
+            // 旧格式兼容：SYMBOL:PRICE:OP:LOT:TP:SL + TIME + TRACE
+            else if (firstTokenFields.Length >= 6)
+            {
+                detail = firstTokenFields[2];
+                transactionToken = tokens[0];
+                commandTime = tokens.Length >= 2 ? tokens[1] : string.Empty;
+                traceStartIndex = 2;
+            }
+            else
+            {
+                error = "无法识别指令格式，预期 DETAIL SYMBOL:PRICE:OPERATION:LOT:TP:SL TIME TRACE";
+                return false;
+            }
+
+            string[] fields = transactionToken.Split(':');
+            if (fields.Length < 6)
+            {
+                error = "交易参数必须包含 SYMBOL:PRICE:OPERATION:LOT:TP:SL";
+                return false;
+            }
+
+            double price;
+            double lots;
+            double takeProfit;
+            double stopLoss;
+
+            if (!TryParseEA2Number(fields[1], out price) ||
+                !TryParseEA2Number(fields[3], out lots) ||
+                !TryParseEA2Number(fields[4], out takeProfit) ||
+                !TryParseEA2Number(fields[5], out stopLoss))
+            {
+                error = "价格、手数、TP 或 SL 包含无效数字";
+                return false;
+            }
+
+            string symbol = fields[0].Trim().ToUpperInvariant();
+            string operation = fields[2].Trim().ToUpperInvariant();
+
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                error = "交易品种为空";
+                return false;
+            }
+
+            if (price <= 0 || double.IsNaN(price) || double.IsInfinity(price))
+            {
+                error = "交易价格无效";
+                return false;
+            }
+
+            if (lots <= 0 || double.IsNaN(lots) || double.IsInfinity(lots))
+            {
+                error = "交易手数必须大于 0";
+                return false;
+            }
+
+            int tradeType;
+            switch (operation)
+            {
+                case "BUY":
+                    tradeType = 1;
+                    break;
+                case "SELL":
+                    tradeType = 2;
+                    break;
+                case "CLOSE_BUY":
+                    tradeType = 3;
+                    break;
+                case "CLOSE_SELL":
+                    tradeType = 4;
+                    break;
+                case "IN_BUY":
+                    tradeType = 5;
+                    break;
+                case "IN_SELL":
+                    tradeType = 6;
+                    break;
+                case "P_CLOSE_BUY":
+                    tradeType = 7;
+                    break;
+                case "P_CLOSE_SELL":
+                    tradeType = 8;
+                    break;
+                default:
+                    error = "不支持的交易操作：" + operation;
+                    return false;
+            }
+
+            command = new EA2ParsedCommand
+            {
+                Detail = detail,
+                Symbol = symbol,
+                Price = price,
+                Operation = operation,
+                Lots = lots,
+                TakeProfit = takeProfit,
+                StopLoss = stopLoss,
+                CommandTime = commandTime,
+                TradeTrace = tokens.Length > traceStartIndex
+                    ? string.Join(" ", tokens, traceStartIndex, tokens.Length - traceStartIndex)
+                    : string.Empty,
+                TradeType = tradeType
+            };
+
+            return true;
+        }
+
+        /// <summary>
+        /// 根据 MQL5 生成的交易指令执行开仓、加仓、平仓或部分平仓。
+        ///
+        /// 注意：
+        /// 1. Detail 只用于记录，不用于判断交易方向。
+        /// 2. Operation 决定交易动作。
+        /// 3. Lots 传给原有 MT4/MT5 AutoTradeTransaction4 执行层。
+        /// 4. executedFlag=true 表示平台执行层接受/生成了订单，不等于最终成交；
+        ///    最终完成状态仍由平台订单更新回调设置 isOrderCompleted。
         /// </summary>
         public async void EA2(string results)
         {
-            string[] split = results.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            //参数说明：XAUUSD:2004.79:BUY:1:50:50 HH:mm:ss orderTypeDetail:openPrice:closePrice:profit
-            //{symbol}:{price}:{optType}:{lotProportion}:{takeProfit}:{stopLoss}
-            //品类:价格:BUY/SELL/CLOSE:手数:止盈值:止损值
-            string opt = split[0];
-            //string ut = split[1];
-            if (split.Length >= 3)
+            EA2ParsedCommand cmd;
+            string parseError;
+
+            if (!TryParseEA2Command(results, out cmd, out parseError))
             {
-                _EA2_TradeRecord = split[2];
+                _Log.LogInfo("[EA2][REJECT] " + parseError +
+                             " | raw=" + (results ?? string.Empty));
+                return;
             }
-            if (!string.IsNullOrEmpty(opt))
+
+            // 保留完整记录，不再只保存 split[2] 的时间字段。
+            _EA2_TradeRecord = results;
+
+            if (!_EnableAutoTrade)
             {
-                int tradeType = -1;
-                string optt = opt.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries)[2];
-                double lots = Convert.ToDouble(opt.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries)[3]);
-                switch (optt)
+                _Log.LogInfo("[EA2][DISABLED] 自动交易未启动，忽略指令：" +
+                             cmd.Operation + " " + cmd.Symbol);
+                return;
+            }
+
+            // 在第一个 await 之前设置锁，防止多个消息并发进入。
+            if (isExecuting)
+            {
+                _Log.LogInfo("[EA2][BUSY] 正在执行上一条指令，拒绝本次并发指令：" +
+                             cmd.Operation + " " + cmd.Symbol);
+                return;
+            }
+
+            if (!isOrderCompleted)
+            {
+                _Log.LogInfo("[EA2][WAIT] 上一笔订单尚未收到完成确认，拒绝本次指令：" +
+                             cmd.Operation + " " + cmd.Symbol);
+                return;
+            }
+
+            isExecuting = true;
+            isOrderCompleted = false;
+            executedFlag = false;
+
+            try
+            {
+                _IsAutoOperationFlag = true;
+                _OrderCreateType = "H";
+
+                _Log.LogInfo(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "[EA2][PARSED] detail={0}; symbol={1}; operation={2}; tradeType={3}; price={4}; lots={5}; tp={6}; sl={7}; time={8}; trace={9}",
+                    cmd.Detail,
+                    cmd.Symbol,
+                    cmd.Operation,
+                    cmd.TradeType,
+                    cmd.Price,
+                    cmd.Lots,
+                    cmd.TakeProfit,
+                    cmd.StopLoss,
+                    cmd.CommandTime,
+                    cmd.TradeTrace));
+
+                // 保留原有账号延迟逻辑。
+                bool delayRequired = true;
+                if (_MyConfig.SpecialNumber != null &&
+                    _MyConfig.SpecialNumber.Length > 0)
                 {
-                    case "BUY":
-                        tradeType = 1;
-                        break;
-                    case "SELL":
-                        tradeType = 2;
-                        break;
-                    case "CLOSE_BUY":
-                        tradeType = 3;
-                        break;
-                    case "CLOSE_SELL":
-                        tradeType = 4;
-                        break;
-                    case "IN_BUY":
-                        tradeType = 5;
-                        break;
-                    case "IN_SELL":
-                        tradeType = 6;
-                        break;
-                    case "P_CLOSE_BUY":
-                        tradeType = 7;
-                        break;
-                    case "P_CLOSE_SELL":
-                        tradeType = 8;
-                        break;
+                    string accountCode = _Account.UserCode;
+                    bool isSpecialAccount = Array.Exists(
+                        _MyConfig.SpecialNumber,
+                        element => element == accountCode);
+
+                    delayRequired = !isSpecialAccount;
                 }
-                if (_EnableAutoTrade && !isExecuting)
+
+                if (delayRequired)
                 {
-                    isExecuting = true;
-                    //跳次分析完成，执行订单逻辑
-                    //上次订单已执行完成（订单返回更新状态后才算订单执行完成）
-                    //if (isOrderCompleted && tradeType != -1 && (DateTime.Now- priceCount).TotalSeconds >= 5 && TradeUtils.isTradeTime())
-                    if (isOrderCompleted && tradeType != -1)
-                    {
-                        //执行自动交易订单时，暂时取消自动交易功能，待订单完成后再回复自动交易
-                        isOrderCompleted = false;
-                        _IsAutoOperationFlag = true;
-                        //EA2 策略下所有交易端都是C端,如果开单失败需要重试
-                        _OrderCreateType = "H";
-                        _Log.LogInfo("执行自动订单开始");
-                        executedFlag = false;
+                    _Log.LogInfo("[EA2] 启动锁单，延时处理中");
+                    await DelayExecution();
+                }
 
-                        _Log.LogInfo("启动锁单,延时处理中");
-                        if (_MyConfig.SpecialNumber != null && _MyConfig.SpecialNumber.Length > 0)
-                        {
-                            // 检查数组中是否包含特定的数据
-                            string searchTerm = _Account.UserCode;
-                            bool contains = Array.Exists(_MyConfig.SpecialNumber, element => element == searchTerm);
-                            //该账号不包含在特殊账号中,执行延迟
-                            if (!contains)
-                            {
-                                await DelayExecution(); // 调用延迟执行的函数
-                            }
-                        }
-                        else
-                        {
-                            //没有配置特殊账号,全部账号都执行延迟
-                            await DelayExecution(); // 调用延迟执行的函数
-                        }
+                switch (_Platform.PlatformNo)
+                {
+                    case (int)Comm.Enum.Platform.MF4:
+                        if (_MF4 == null)
+                            throw new InvalidOperationException("MF4 平台对象未初始化");
 
-                        switch (_Platform.PlatformNo)
-                        {
-                            case (int)Comm.Enum.Platform.MF4:
-                                _MF4._OrderCreateType = _OrderCreateType;
-                                _MF4._EA2_TradeRecord = _EA2_TradeRecord;
-                                _MF4._CurrentPrice = _StrategyConfig.CurrentPrice;
-                                //在执行自动交易情况,无论是否已有单,都进行开单操作
-                                executedFlag = _MF4.AutoTradeTransaction3(tradeType, _IsAutoOperationFlag, out _SendTime);
-                                _StrategyConfig.CurrentPrice = _MF4._CurrentPrice;
-                                break;
-                            case (int)Comm.Enum.Platform.MT4:
-                                _MT4._OrderCreateType = _OrderCreateType;
-                                _MT4._EA2_TradeRecord = _EA2_TradeRecord;
-                                _MT4._CurrentPrice = _StrategyConfig.CurrentPrice;
-                                executedFlag = _MT4.AutoTradeTransaction4(tradeType, lots, _IsAutoOperationFlag, out _SendTime);
-                                _StrategyConfig.CurrentPrice = _MT4._CurrentPrice;
-                                break;
-                            case (int)Comm.Enum.Platform.V4:
-                                _V4._OrderCreateType = _OrderCreateType;
-                                _V4._EA2_TradeRecord = _EA2_TradeRecord;
-                                executedFlag = _V4.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
-                                break;
-                            case (int)Comm.Enum.Platform.MT5:
-                                _MT5._OrderCreateType = _OrderCreateType;
-                                _MT5._EA2_TradeRecord = _EA2_TradeRecord;
-                                _MT5._CurrentPrice = _StrategyConfig.CurrentPrice;
-                                executedFlag = _MT5.AutoTradeTransaction4(tradeType, lots, _IsAutoOperationFlag, out _SendTime);
-                                _StrategyConfig.CurrentPrice = _MT5._CurrentPrice;
-                                break;
-                        }
-                        //发送订单完成后，停止自动交易，待订单更新后修改自动交易标识
-                        if (executedFlag)
-                        {
-                            _Log.LogInfo("执行自动订单完成");
-                        }
-                        else
-                        {
-                            isOrderCompleted = true;
-                            _Log.LogInfo("无自动订单生成");
-                        }
-                    }
-                    //CancelCheckForSelected();
-                    isExecuting = false;
+                        _MF4._OrderCreateType = _OrderCreateType;
+                        _MF4._EA2_TradeRecord = _EA2_TradeRecord;
+                        _MF4._CurrentPrice = _StrategyConfig.CurrentPrice;
+
+                        // MF4 原接口不接收 lots，保持既有接口行为。
+                        executedFlag = _MF4.AutoTradeTransaction3(
+                            cmd.TradeType,
+                            _IsAutoOperationFlag,
+                            out _SendTime);
+
+                        _StrategyConfig.CurrentPrice = _MF4._CurrentPrice;
+                        break;
+
+                    case (int)Comm.Enum.Platform.MT4:
+                        if (_MT4 == null)
+                            throw new InvalidOperationException("MT4 平台对象未初始化");
+
+                        _MT4._OrderCreateType = _OrderCreateType;
+                        _MT4._EA2_TradeRecord = _EA2_TradeRecord;
+                        _MT4._CurrentPrice = _StrategyConfig.CurrentPrice;
+
+                        executedFlag = _MT4.AutoTradeTransaction4(
+                            cmd.TradeType,
+                            cmd.Lots,
+                            _IsAutoOperationFlag,
+                            out _SendTime);
+
+                        _StrategyConfig.CurrentPrice = _MT4._CurrentPrice;
+                        break;
+
+                    case (int)Comm.Enum.Platform.V4:
+                        if (_V4 == null)
+                            throw new InvalidOperationException("V4 平台对象未初始化");
+
+                        _V4._OrderCreateType = _OrderCreateType;
+                        _V4._EA2_TradeRecord = _EA2_TradeRecord;
+
+                        // V4 原接口不接收 lots，保持既有接口行为。
+                        executedFlag = _V4.AutoTradeTransaction2(
+                            cmd.TradeType,
+                            _IsAutoOperationFlag,
+                            out _SendTime);
+                        break;
+
+                    case (int)Comm.Enum.Platform.MT5:
+                        if (_MT5 == null)
+                            throw new InvalidOperationException("MT5 平台对象未初始化");
+
+                        _MT5._OrderCreateType = _OrderCreateType;
+                        _MT5._EA2_TradeRecord = _EA2_TradeRecord;
+                        _MT5._CurrentPrice = _StrategyConfig.CurrentPrice;
+
+                        executedFlag = _MT5.AutoTradeTransaction4(
+                            cmd.TradeType,
+                            cmd.Lots,
+                            _IsAutoOperationFlag,
+                            out _SendTime);
+
+                        _StrategyConfig.CurrentPrice = _MT5._CurrentPrice;
+                        break;
+
+                    default:
+                        throw new NotSupportedException(
+                            "不支持的平台编号：" + _Platform.PlatformNo);
+                }
+
+                if (executedFlag)
+                {
+                    _Log.LogInfo("[EA2][SUBMITTED] 平台执行层已接受指令：" +
+                                 cmd.Operation + " " + cmd.Symbol +
+                                 " lots=" + cmd.Lots.ToString(CultureInfo.InvariantCulture) +
+                                 "；等待平台成交/订单更新回调确认");
                 }
                 else
                 {
-                    _Log.LogInfo("未启动自动交易");
+                    isOrderCompleted = true;
+                    _Log.LogInfo("[EA2][FAILED] 平台未生成订单：" +
+                                 cmd.Operation + " " + cmd.Symbol);
                 }
+            }
+            catch (Exception ex)
+            {
+                // 执行层抛出异常时释放等待状态，允许后续指令重试。
+                isOrderCompleted = true;
+                _Log.LogInfo("[EA2][EXCEPTION] " + ex);
+            }
+            finally
+            {
+                isExecuting = false;
             }
         }
         /// <summary>

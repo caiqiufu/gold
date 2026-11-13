@@ -85,7 +85,7 @@ namespace uClient.Broker
         /// 日志
         /// </summary>
         public uClient.Comm.Log _Log;
-        
+
         /// <summary>
         /// EA配置数据
         /// </summary>
@@ -135,7 +135,7 @@ namespace uClient.Broker
         {
             //Log 实例只初始化一次
             _Log = new uClient.Comm.Log(lstTradeRecord, lstLog);
-        }       
+        }
 
         /// <summary>
         /// 点击按钮后异步响应
@@ -168,7 +168,7 @@ namespace uClient.Broker
                 }
             });
         }
-        
+
 
         private void DataLoadForm_Load(object sender, EventArgs e)
         {
@@ -250,13 +250,13 @@ namespace uClient.Broker
             //timer 启用
             timerCheckPlatformConnectStatus.Enabled = true;
             timer_JR.Enabled = true;
-            timer_JR.Interval = 1000 * 60* 10;           
+            timer_JR.Interval = 1000 * 60 * 10;
             _Log.LogInfo("timer_JR时钟启动,执行周期[" + timer_JR.Interval / 1000 / 60 + "]min");
             timer_WZ.Enabled = true;
             timer_WZ.Interval = 1000 * 60 * 12;
             _Log.LogInfo("timer_WZ,执行周期[" + timer_WZ.Interval / 1000 / 60 + "]min");
             //金十数据
-            timer_DataCenter.Enabled = true;           
+            timer_DataCenter.Enabled = true;
             timer_DataCenter.Interval = 1000 * 60 * 10;
             _Log.LogInfo("timer_DataCenter,执行周期[" + timer_DataCenter.Interval / 1000 / 60 + "]min");
             //Dukascopy数据
@@ -264,7 +264,7 @@ namespace uClient.Broker
             timer_Dukascopy.Interval = 1000 * 60 * 15;
             _Log.LogInfo("timer_Dukascopy,执行周期[" + timer_Dukascopy.Interval / 1000 / 60 + "]min");
 
-            timer_KLineCheck.Enabled = true;
+            timer_KLineCheck.Enabled = false;
             timer_KLineCheck.Interval = 1000 * 60 * 3;
             _Log.LogInfo("timer_KLineCheck,执行周期[" + timer_KLineCheck.Interval / 1000 / 60 + "]min");
 
@@ -332,7 +332,7 @@ namespace uClient.Broker
 
             label_Platform.Text = _Broker.BrokerName;
             textBox_account.Text = _Account.UserCode;
-            textBox_password.Text = _Account.Password;           
+            textBox_password.Text = _Account.Password;
 
             //基础配置数据
             checkBox_NotifyFlag.Checked = _StrategyConfig.NotifyFlag;
@@ -343,7 +343,7 @@ namespace uClient.Broker
         public void LoadConfig()
         {
             string newMyConfigFile = rootPath + _MyConfigFile;
-            string newConfigFile = rootPath + _ConfigFile;          
+            string newConfigFile = rootPath + _ConfigFile;
             _logger.Info("开始加载初始化文件");
             if (File.Exists(newMyConfigFile))
             {
@@ -407,7 +407,7 @@ namespace uClient.Broker
                             string defaultBrokerCode = string.IsNullOrEmpty(_MainFormPara.BrokerCode) ? _Platform.DefaultBrokerCode : _MainFormPara.BrokerCode;
                             _Broker = _Config.PlatformList[_MainFormPara.PlatformCode].BrokerList[defaultBrokerCode];
                             if (_Broker != null)
-                            {                                
+                            {
                                 _Account = _Broker.DefaultAccountType.Equals("Demo") ? _Broker.DemoAccount : _Broker.LiveAccount;
                                 _TradeSymbol = _Broker.DefaultSymbol;
                                 if (_Broker.TradePara == null)
@@ -558,9 +558,10 @@ namespace uClient.Broker
             {
                 lblConnectStatus.Invoke(new Action<bool>(UpdateConnectStatus), new object[] { status });
             }
-            else {
+            else
+            {
                 lblConnectStatus.BackColor = Color.Red;
-                label_BrokePrice.Text ="0";
+                label_BrokePrice.Text = "0";
             }
             lblConnectStatus.Text = status ? "已连接" : "断开";
             lblConnectStatus.BackColor = status ? Color.Green : Color.Red;
@@ -571,7 +572,8 @@ namespace uClient.Broker
         }
         private void bgwBroberQuote_DoWork(object sender, System.ComponentModel.DoWorkEventArgs e)
         {
-            Task.Run(() => {
+            Task.Run(() =>
+            {
                 BroberQuote();
             });
         }
@@ -618,15 +620,15 @@ namespace uClient.Broker
         /// </summary>
         public void BroberQuote()
         {
-            updateDsRunningStatus("Q","1");
+            updateDsRunningStatus("Q", "1");
             switch (_Platform.PlatformNo)
-            {                
+            {
                 case (int)uClient.Comm.Enum.Platform.MT4:
                     if (_MT4._QuoteEventArgs != null)
                     {
                         string symbols = _MT4._QuoteEventArgs.Symbol;
                         double prices = _MT4._QuoteEventArgs.Bid;
-                        double pricesAsk = _MT4._QuoteEventArgs.Ask;                        
+                        double pricesAsk = _MT4._QuoteEventArgs.Ask;
                         if (string.Equals(symbols, _TradeSymbol))
                         {
                             _MasterPublisher.SendFrame($"{"Gold"} {prices} {pricesAsk} {0}");
@@ -753,23 +755,23 @@ namespace uClient.Broker
             else
             {
                 label_BrokePrice.Text = price.ToString("f2");
-            }          
+            }
         }
         /// <summary>
         /// 采集数据状态变化
         /// </summary>
         /// <param name="status"></param>
-        public void updateDsRunningStatus(string type,string status)
+        public void updateDsRunningStatus(string type, string status)
         {
             if (label_BrokePrice.InvokeRequired)
             {
-                label_dataCollectionStatus.Invoke(new Action<string,string>(updateDsRunningStatus), new object[] { type, status });
+                label_dataCollectionStatus.Invoke(new Action<string, string>(updateDsRunningStatus), new object[] { type, status });
             }
             else
             {
                 string time = DateTime.Now.ToString("HH:mm:ss.fff");
                 string statusDesc = "No Running";
-                if (string.Equals(status,"1"))
+                if (string.Equals(status, "1"))
                 {
                     statusDesc = "Running";
                 }
@@ -781,7 +783,7 @@ namespace uClient.Broker
                 {
                     statusDesc = "Data Save Success";
                 }
-                if (string.Equals(type,"Q"))
+                if (string.Equals(type, "Q"))
                 {
                     label_dataCollectionStatus.Text = time + " " + statusDesc;
                 }
@@ -849,14 +851,15 @@ namespace uClient.Broker
                                 //先断开平台连接,再启动连接
                                 _MT4.DisConnect();
                                 //连接平台
-                                Task.Run(() => {
+                                Task.Run(() =>
+                                {
                                     _MT4.Connect();
                                     if (isConnect())
                                     {
                                         AfterConnectCompleted();
                                     }
                                     _Log.LogInfo("MT4平台自动断开连接,由系统自动拉起完成");
-                                });                                
+                                });
                             }
                             break;
                         case (int)uClient.Comm.Enum.Platform.MT5:
@@ -866,7 +869,8 @@ namespace uClient.Broker
                                 //先断开连接,再重新连接
                                 _Log.LogInfo("断开连接");
                                 //先断开平台连接,再启动连接
-                                Task.Run(() => {
+                                Task.Run(() =>
+                                {
                                     _MT5.DisConnect();
                                     //连接平台
                                     _MT5.Connect();
@@ -875,7 +879,7 @@ namespace uClient.Broker
                                         AfterConnectCompleted();
                                     }
                                     _Log.LogInfo("MT5平台自动断开连接,由系统自动拉起完成");
-                                });                              
+                                });
                             }
                             break;
                     }
@@ -891,12 +895,13 @@ namespace uClient.Broker
         private void timer_JR_Tick(object sender, EventArgs e)
         {
             _Log.LogInfo("JR数据采集开始");
-            updateDsRunningStatus("JR","1");
-            Task.Run(() => {
+            updateDsRunningStatus("JR", "1");
+            Task.Run(() =>
+            {
                 updateDsRunningStatus("JR", "2");
                 HTTPHelper.JRSummaryData();
                 updateDsRunningStatus("JR", "3");
-            });            
+            });
             _Log.LogInfo("JR数据采集完成");
         }
         /// <summary>
@@ -908,20 +913,22 @@ namespace uClient.Broker
         {
             _Log.LogInfo("WZ数据采集开始");
             updateDsRunningStatus("WZ", "1");
-            Task.Run(() => {
+            Task.Run(() =>
+            {
                 updateDsRunningStatus("WZ", "2");
                 HTTPHelper.WZSummaryData();
                 updateDsRunningStatus("WZ", "3");
-            });           
+            });
             _Log.LogInfo("WZ数据采集完成");
         }
 
         private void timer_DataCenter_Tick(object sender, EventArgs e)
         {
             _Log.LogInfo("DataCenter数据采集开始");
-            Task.Run(() => {
+            Task.Run(() =>
+            {
                 HTTPHelper.DataCenterData();
-            });           
+            });
             _Log.LogInfo("DataCenter数据采集完成");
         }
         public async Task ClearDataAsync()
@@ -956,7 +963,8 @@ namespace uClient.Broker
         private void timer_Dukascopy_Tick(object sender, EventArgs e)
         {
             _Log.LogInfo("Dukascopy数据采集开始");
-            Task.Run(() => {
+            Task.Run(() =>
+            {
                 HTTPHelper.DukascopySummaryData();
             });
             _Log.LogInfo("Dukascopy数据采集完成");
@@ -972,14 +980,14 @@ namespace uClient.Broker
         private void timer_KLineCheck_Tick(object sender, EventArgs e)
         {
             bool isTradeTime = Utils.checkIsTradeTime(_Config.SysConfig["EANotradeDuration"], DBUtils.getDateTime());
-            if (isTradeTime) 
+            if (isTradeTime)
             {
                 bool flag = Utils.checkKLineCollectionStatus();
                 if (!flag)
                 {
                     if (KLineFailedNotifyCount > 0)
                     {
-                        string[] mails = new string[] { "caiqiufu@hotmail.com"};
+                        string[] mails = new string[] { "caiqiufu@hotmail.com" };
                         StringBuilder content = new StringBuilder();
                         content.AppendFormat("【数据采集提醒】[{0}]", "K线数据采集失败,时间：" + DBUtils.getDateTime());
                         EmailHelper.SendEmail(mails, "【深圳龙知易科技】异常提醒", content.ToString());
@@ -1047,9 +1055,9 @@ namespace uClient.Broker
                                 break;
                         }
 
-                        string[] mails = new string[] { "caiqiufu@hotmail.com"};
+                        string[] mails = new string[] { "caiqiufu@hotmail.com" };
                         StringBuilder content = new StringBuilder();
-                        content.AppendFormat("【数据采集提醒】[{0}]", "报价数据采集失败,时间：" + DBUtils.getDateTime()+",已启动平台自动拉起功能");
+                        content.AppendFormat("【数据采集提醒】[{0}]", "报价数据采集失败,时间：" + DBUtils.getDateTime() + ",已启动平台自动拉起功能");
                         EmailHelper.SendEmail(mails, "【深圳龙知易科技】异常提醒", content.ToString());
                         KLineFailedNotifyCount--;
                         _Log.LogInfo("报价数据采集异常");
@@ -1063,10 +1071,10 @@ namespace uClient.Broker
                             _Log.LogInfo("报价线数据采集正常");
                             KLineNotifyLogCount--;
                         }
-                    }                   
+                    }
                 }
 
-            }           
+            }
         }
     }
     // 定义任务

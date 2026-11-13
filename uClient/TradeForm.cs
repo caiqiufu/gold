@@ -81,7 +81,14 @@ namespace uClient
         /// <summary>
         /// 数据源消息订阅
         /// </summary>
-        public SubscriberSocket _Subscriber = new SubscriberSocket();
+        public SubscriberSocket _Subscriber;
+        /// <summary>
+        /// 数据源订阅线程生命周期控制。NetMQ socket 的创建、连接、接收和释放必须在同一线程。
+        /// </summary>
+        private readonly object _dsLifecycleLock = new object();
+        private readonly ManualResetEventSlim _dsWorkerStopped = new ManualResetEventSlim(true);
+        private volatile bool _dsStopRequested = false;
+        private string _dsEndpoint = string.Empty;
         /// <summary>
         /// 主窗口发送消息
         /// </summary>
@@ -751,70 +758,161 @@ namespace uClient
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        public void btnBuy_Click(object sender, EventArgs e)
+        // MT5 手动开仓：每次点击均独立提交，不使用等待成交/重复点击锁。
+        // SDK 调用仍在后台执行，避免阻塞 WinForms UI。
+        private async Task SubmitMt5ManualOpenAsync(bool isBuy, decimal lots)
         {
-            StopAutoTrade();
-            if (isConnect())
+            string side = isBuy ? "BUY" : "SELL";
+            try
             {
-                AsynExec(this.btnBuy, () =>
+                _Log.LogInfo("[MT5][MANUAL_OPEN][SEND_BEGIN] side=" + side + " lots=" + lots);
+                DateTime sendTime = await Task.Run(() =>
                 {
-                    CancelCheck();
-                    _IsAutoOperationFlag = false;
-                    switch (_Platform.PlatformNo)
-                    {
-                        case (int)Comm.Enum.Platform.MF4:
-                            _MF4.OpenBuyOrder(_IsAutoOperationFlag, out _SendTime, _TradePara.BuyLots);
-                            break;
-                        case (int)Comm.Enum.Platform.MT4:
-                            _MT4.OpenBuyOrder(_IsAutoOperationFlag, out _SendTime, _TradePara.BuyLots);
-                            break;
-                        case (int)Comm.Enum.Platform.V4:
-                            _V4.OpenBuyOrder(_IsAutoOperationFlag, out _SendTime, _TradePara.BuyLots);
-                            break;
-                        case (int)Comm.Enum.Platform.MT5:
-                            _MT5.OpenBuyOrder(_IsAutoOperationFlag, out _SendTime, _TradePara.BuyLots);
-                            break;
-                    }
+                    DateTime time;
+                    if (isBuy) _MT5.OpenBuyOrder(false, out time, lots);
+                    else _MT5.OpenSellOrder(false, out time, lots);
+                    return time;
                 });
+                _SendTime = sendTime;
+                _Log.LogInfo("[MT5][MANUAL_OPEN][SEND_RETURNED] side=" + side +
+                             " 等待服务器回报（非成交确认）");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("[MT5][MANUAL_OPEN][ERROR] " + ex);
+                _Log.LogInfo("[MT5][MANUAL_OPEN][ERROR] side=" + side + " " + ex.Message);
             }
         }
-        /// <summary>
-        /// 手动卖空开仓
-        /// </summary>
-        /// <param name="sender"></param>
-        /// <param name="e"></param>
-        public void btnSell_Click(object sender, EventArgs e)
+
+        public async void btnBuy_Click(object sender, EventArgs e)
         {
             StopAutoTrade();
-            if (isConnect())
+            if (!isConnect()) return;
+            CancelCheck();
+            _IsAutoOperationFlag = false;
+            if (_Platform.PlatformNo == (int)Comm.Enum.Platform.MT5)
             {
-                CancelCheck();
-                _IsAutoOperationFlag = false;
+                await SubmitMt5ManualOpenAsync(true, _TradePara.BuyLots);
+                return;
+            }
+            AsynExec(this.btnBuy, () =>
+            {
                 switch (_Platform.PlatformNo)
                 {
-                    case (int)Comm.Enum.Platform.MF4:
-                        _MF4.OpenSellOrder(_IsAutoOperationFlag, out _SendTime, _TradePara.SellLots);
-                        break;
-                    case (int)Comm.Enum.Platform.MT4:
-                        _MT4.OpenSellOrder(_IsAutoOperationFlag, out _SendTime, _TradePara.SellLots);
-                        break;
-                    case (int)Comm.Enum.Platform.V4:
-                        _V4.OpenSellOrder(_IsAutoOperationFlag, out _SendTime, _TradePara.SellLots);
-                        break;
-                    case (int)Comm.Enum.Platform.MT5:
-                        _MT5.OpenSellOrder(_IsAutoOperationFlag, out _SendTime, _TradePara.SellLots);
-                        break;
+                    case (int)Comm.Enum.Platform.MF4: _MF4.OpenBuyOrder(false, out _SendTime, _TradePara.BuyLots); break;
+                    case (int)Comm.Enum.Platform.MT4: _MT4.OpenBuyOrder(false, out _SendTime, _TradePara.BuyLots); break;
+                    case (int)Comm.Enum.Platform.V4: _V4.OpenBuyOrder(false, out _SendTime, _TradePara.BuyLots); break;
                 }
+            });
+        }
+
+        public async void btnSell_Click(object sender, EventArgs e)
+        {
+            StopAutoTrade();
+            if (!isConnect()) return;
+            CancelCheck();
+            _IsAutoOperationFlag = false;
+            if (_Platform.PlatformNo == (int)Comm.Enum.Platform.MT5)
+            {
+                await SubmitMt5ManualOpenAsync(false, _TradePara.SellLots);
+                return;
             }
+            AsynExec(this.btnSell, () =>
+            {
+                switch (_Platform.PlatformNo)
+                {
+                    case (int)Comm.Enum.Platform.MF4: _MF4.OpenSellOrder(false, out _SendTime, _TradePara.SellLots); break;
+                    case (int)Comm.Enum.Platform.MT4: _MT4.OpenSellOrder(false, out _SendTime, _TradePara.SellLots); break;
+                    case (int)Comm.Enum.Platform.V4: _V4.OpenSellOrder(false, out _SendTime, _TradePara.SellLots); break;
+                }
+            });
         }
         /// <summary>
         /// 手动平仓
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        public void btnClose_Click(object sender, EventArgs e)
+        // 手动平仓不维护 Pending Ticket 集合，也不拦截连续点击。
+        private void RunOnUiThread(Action action)
+        {
+            if (IsDisposed || Disposing || !IsHandleCreated) return;
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(action); }
+                catch (InvalidOperationException) { }
+                return;
+            }
+            action();
+        }
+
+        private async Task CloseMt5ManuallyAsync()
+        {
+            // 所有 DataGridView 读取都在 UI 线程完成；SDK 操作在后台执行。
+            if (_MT5 == null || !_MT5.isConnect()) return;
+            gvPositions.EndEdit();
+            if (gvPositions.Rows.Count == 1)
+                gvPositions.Rows[0].Cells[0].Value = true;
+            var tickets = new List<string>();
+            foreach (DataGridViewRow row in gvPositions.Rows)
+            {
+                if (row.IsNewRow) continue;
+                if (!Convert.ToBoolean(row.Cells[0].Value ?? false)) continue;
+                string ticket = Convert.ToString(row.Cells[1].Value);
+                if (!string.IsNullOrWhiteSpace(ticket)) tickets.Add(ticket);
+            }
+            if (tickets.Count == 0)
+            {
+                MessageBox.Show(this, "请选择要平仓的订单");
+                return;
+            }
+            string closeDuration = _TradePara.AutoCloseTimeDuration;
+            double timezone = _TradePara.Timezone;
+            foreach (string ticket in tickets.Distinct())
+            {
+                try
+                {
+                    _Log.LogInfo("[MT5][MANUAL_CLOSE][GET_ORDER_BEGIN] ticket=" + ticket);
+                    mtapi.mt5.Order order = await Task.Run(() => _MT5.GetOrder(ticket));
+                    if (order == null)
+                        throw new InvalidOperationException("平台未找到订单 ticket=" + ticket);
+                    _Log.LogInfo("[MT5][MANUAL_CLOSE][GET_ORDER_END] ticket=" + ticket);
+                    if (!TradeUtils.IsCloseOrderTime(TradeUtils.GetCloseTimeDuration(closeDuration),
+                            DateTime.Now, order.OpenTime.AddHours(timezone)))
+                    {
+                        DialogResult dr = MessageBox.Show(this,
+                            "开仓时间未超过[" + closeDuration + "]，是否需要平仓？",
+                            "平仓提示", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                            MessageBoxDefaultButton.Button2);
+                        if (dr != DialogResult.Yes) continue;
+                    }
+                    _Log.LogInfo("[MT5][MANUAL_CLOSE][SEND_BEGIN] ticket=" + ticket);
+                    DateTime sendTime = await Task.Run(() =>
+                    {
+                        DateTime time;
+                        _MT5.CloseOrder(order, false, out time);
+                        return time;
+                    });
+                    _SendTime = sendTime;
+                    _Log.LogInfo("[MT5][MANUAL_CLOSE][SEND_RETURNED] ticket=" + ticket +
+                                 " awaiting MarketClose callback (not a fill confirmation)");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error("[MT5][MANUAL_CLOSE][ERROR] ticket=" + ticket + " " + ex);
+                    _Log.LogInfo("[MT5][MANUAL_CLOSE][ERROR] ticket=" + ticket + " " + ex.Message);
+                }
+            }
+        }
+
+        public async void btnClose_Click(object sender, EventArgs e)
         {
             StopAutoTrade();
+            if (_Platform != null && _Platform.PlatformNo == (int)Comm.Enum.Platform.MT5)
+            {
+                CancelCheck();
+                await CloseMt5ManuallyAsync();
+                return;
+            }
             if (isConnect())
             {
                 CancelCheck();
@@ -947,9 +1045,8 @@ namespace uClient
         /// <param name="e"></param>
         public void btnStart_Click(object sender, EventArgs e)
         {
-            if (isConnect() && _IsDSConnectFlag)
+            if (isConnect() && IsDataSourceReady())
             {
-
                 StartAutoTrade();
             }
             else
@@ -962,6 +1059,18 @@ namespace uClient
         /// </summary>
         public void StartAutoTrade()
         {
+            if (InvokeRequired)
+            {
+                RunOnUiThread(() => StartAutoTrade());
+                return;
+            }
+            // 所有启动入口统一检查，避免定时器或其他调用绕过按钮检查。
+            if (!isConnect() || !IsDataSourceReady())
+            {
+                _Log.LogInfo("[AUTO_TRADE][START_BLOCKED] 交易平台或数据源尚未就绪，禁止启动自动交易");
+                return;
+            }
+
             _Log.LogInfo("自动交易启用");
             btnStart.Enabled = false;
             btnStart.BackColor = System.Drawing.Color.Green;
@@ -981,6 +1090,13 @@ namespace uClient
         }
         public void StopAutoTrade()
         {
+            if (InvokeRequired)
+            {
+                // Stop the trading flag immediately, then update controls asynchronously.
+                _EnableAutoTrade = false;
+                RunOnUiThread(() => StopAutoTrade());
+                return;
+            }
             _Log.LogInfo("自动交易停止");
             _EnableAutoTrade = false;
             lblTradeStatus.Text = "自动交易已停止";
@@ -1112,6 +1228,14 @@ namespace uClient
         /// </summary>
         public Queue<string> _BrokerAndDSPriceDiffList = new Queue<string>(5);
         /// <summary>
+        /// V20261027_PRICEDIFF_TIME_FORMAT：价格差异记录的时间格式（读写统一、与系统区域设置无关）。
+        /// </summary>
+        private const string PriceDiffTimeFormat = "yyyy/MM/dd HH:mm:ss";
+        /// <summary>
+        /// 兼容旧记录：原来用 now.ToString() 按系统区域设置写入，中文系统下是 "yyyy/M/d H:mm:ss"。
+        /// </summary>
+        private static readonly string[] PriceDiffTimeParseFormats = { "yyyy/MM/dd HH:mm:ss", "yyyy/M/d H:mm:ss" };
+        /// <summary>
         /// 数据源与平台价格差异类型
         /// 0:没有价格差异
         /// 1:价格扩大,开多单
@@ -1148,27 +1272,41 @@ namespace uClient
             {
                 double priceDiff = Math.Abs(Math.Round(dsPrice - brokerPrice, 2));
                 DateTime now = DateTime.Now;
-                if (_BrokerAndDSPriceDiffList.Count > 0)
+                // V20261027_PRICEDIFF_TIME_FORMAT：
+                // 原来写入用 now.ToString()，按系统区域设置输出（本机为 "yyyy/M/d H:mm:ss"，
+                // 小时/月/日小于 10 时只有一位），读取却用严格的 "yyyy/MM/dd HH:mm:ss"。
+                // 23 点的记录碰巧是两位小时能解析，过了零点写入 "2026/10/27 0:00:37"
+                // 就会抛 FormatException。现在写入固定为两位格式，读取兼容旧记录且不再抛异常。
+                string record = priceDiff.ToString(CultureInfo.InvariantCulture) + ":" +
+                                now.ToString(PriceDiffTimeFormat, CultureInfo.InvariantCulture);
+                // 本方法由 MarketQuote 中的 Task.Run 并发调用，Queue<T> 非线程安全，需加锁。
+                lock (_BrokerAndDSPriceDiffList)
                 {
-                    // 使用 LINQ 获取最新放入的数据
-                    string lastDiff = _BrokerAndDSPriceDiffList.Last();
-                    string datePart = lastDiff.Split(new[] { ':' }, 2)[1];
-                    DateTime dateTime = DateTime.ParseExact(
-                        datePart,
-                        "yyyy/MM/dd HH:mm:ss",
-                        CultureInfo.InvariantCulture
-                    );
-
-                    TimeSpan difference = now - dateTime;
-                    //超过间隔时间,保存价格差异
-                    if (difference.TotalMinutes > 1)
+                    if (_BrokerAndDSPriceDiffList.Count > 0)
                     {
-                        _BrokerAndDSPriceDiffList.Enqueue(priceDiff.ToString() + ":" + now.ToString());
+                        // 使用 LINQ 获取最新放入的数据
+                        string lastDiff = _BrokerAndDSPriceDiffList.Last();
+                        string[] parts = lastDiff.Split(new[] { ':' }, 2);
+                        DateTime dateTime;
+                        if (parts.Length < 2 ||
+                            !DateTime.TryParseExact(parts[1], PriceDiffTimeParseFormats, CultureInfo.InvariantCulture,
+                                                    DateTimeStyles.None, out dateTime))
+                        {
+                            // 无法解析的旧记录视为已超过间隔，直接写入新记录
+                            dateTime = DateTime.MinValue;
+                        }
+
+                        TimeSpan difference = now - dateTime;
+                        //超过间隔时间,保存价格差异
+                        if (difference.TotalMinutes > 1)
+                        {
+                            _BrokerAndDSPriceDiffList.Enqueue(record);
+                        }
                     }
-                }
-                else
-                {
-                    _BrokerAndDSPriceDiffList.Enqueue(priceDiff.ToString() + ":" + now.ToString());
+                    else
+                    {
+                        _BrokerAndDSPriceDiffList.Enqueue(record);
+                    }
                 }
             }
         }
@@ -1201,14 +1339,33 @@ namespace uClient
                     }
                     break;
             }
-            if (dsPrice > 0 && brokerPrice > 0 && _TradePara.QuotaCheckValue > 1 && _BrokerAndDSPriceDiffList.Count > 3)
+            if (dsPrice > 0 && brokerPrice > 0 && _TradePara.QuotaCheckValue > 1)
             {
                 double prices = 0;
-                foreach (string diff in _BrokerAndDSPriceDiffList)
+                int priceCount = 0;
+                // 队列的 Count、遍历均在同一把锁内，避免与行情线程并发访问。
+                lock (_BrokerAndDSPriceDiffList)
                 {
-                    prices = prices + Double.Parse(diff.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries)[0]);
+                    if (_BrokerAndDSPriceDiffList.Count <= 3)
+                        return;
+
+                    foreach (string diff in _BrokerAndDSPriceDiffList)
+                    {
+                        string[] parts = diff.Split(new[] { ':' }, 2);
+                        double parsedDiff;
+                        if (parts.Length == 2 &&
+                            double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out parsedDiff))
+                        {
+                            prices += parsedDiff;
+                            priceCount++;
+                        }
+                    }
                 }
-                double avgPrice = Math.Round(prices / _BrokerAndDSPriceDiffList.Count, 2);
+                if (priceCount == 0)
+                {
+                    return;
+                }
+                double avgPrice = Math.Round(prices / priceCount, 2);
                 double currDiff = Math.Round(dsPrice - brokerPrice, 2);
                 //价格差值变大,开多单
                 if (currDiff - avgPrice > (double)_TradePara.QuotaCheckValue)
@@ -1227,7 +1384,10 @@ namespace uClient
                     string message = "价格差异:平均偏差[" + avgPrice + "]当前偏差[" + currDiff + "]设置值[" + _TradePara.QuotaCheckValue + "]";
                     _Log.LogTradeRecord("", message);
                     _Log.LogInfo(message);
-                    _BrokerAndDSPriceDiffList.Clear();
+                    lock (_BrokerAndDSPriceDiffList)
+                    {
+                        _BrokerAndDSPriceDiffList.Clear();
+                    }
                 }
             }
         }
@@ -1405,6 +1565,41 @@ namespace uClient
         /// </summary>
         public bool isExecuting = false;
         /// <summary>
+        /// V20261026_MARKETQUOTE_LOOP_GUARD：
+        /// isExecuting 的"检查+置位"原子锁。MarketQuote（数据源线程）与 BroberQuote（平台行情线程）
+        /// 两条线程都会走同一段跳次分析/下单逻辑，原来 `!isExecuting` 判断和 `isExecuting = true`
+        /// 之间没有加锁，两条线程可能同时进入，重复下单。
+        /// </summary>
+        private readonly object _executingLock = new object();
+        /// <summary>
+        /// 事件跳次列表 _DSQuote.BidDiffForEventTrade 的读写锁。
+        /// 该 List 同时被 MarketQuote（写入 + 遍历 + Clear）和 BroberQuote（遍历 + Clear）访问，
+        /// 一边 foreach 一边被另一线程修改会抛 InvalidOperationException
+        /// （Collection was modified），这是 MarketQuote 循环异常退出的主要原因之一。
+        /// </summary>
+        private readonly object _eventTradeLock = new object();
+
+        private bool TryBeginExecuting()
+        {
+            lock (_executingLock)
+            {
+                if (isExecuting)
+                {
+                    return false;
+                }
+                isExecuting = true;
+                return true;
+            }
+        }
+
+        private void EndExecuting()
+        {
+            lock (_executingLock)
+            {
+                isExecuting = false;
+            }
+        }
+        /// <summary>
         /// 交易订单是否执行完成，包括发送和接收订单消息
         /// </summary>
         public bool isOrderCompleted = true;
@@ -1431,224 +1626,385 @@ namespace uClient
         /// <summary>
         /// 数据源行情获取并计算是否自动交易
         /// </summary>
+        /// <summary>
+        /// 数据源行情获取并计算是否自动交易
+        ///
+        /// V20261026_MARKETQUOTE_LOOP_GUARD：
+        /// 本方法运行在 bgwMarketQuote（BackgroundWorker）线程上。原实现整个 while(true) 没有任何
+        /// try/catch，循环体内任意一处抛异常（报文格式不对导致 split 越界 / double.Parse 失败、
+        /// 跳次列表被另一线程并发修改、下单接口异常、跨线程操作控件异常等），异常都会直接冒出
+        /// DoWork，BackgroundWorker 静默吞掉异常并结束——行情循环就此停止，界面上数据源仍显示
+        /// "已连接"，也没有任何日志。且如果异常发生在 isExecuting = true 之后，isExecuting 永远
+        /// 停在 true，即使重新启动循环，自动交易也再不会触发。
+        ///
+        /// 现在：
+        ///   1. 每条行情的处理单独 try/catch，异常只记日志、丢弃该条行情，循环继续；
+        ///   2. isExecuting 由 TryBeginExecuting/EndExecuting 原子置位，并在 finally 中复位；
+        ///   3. 报文先校验字段数并用 TryParse 解析，坏报文直接跳过；
+        ///   4. 跳次列表的写入/分析/清空统一在 _eventTradeLock 下进行；
+        ///   5. 用带超时的 TryReceiveFrameString，使 CancelAsync 能真正结束循环；
+        ///      只有套接字已被关闭/终止这类不可恢复异常才退出循环，并记录日志。
+        /// </summary>
         public virtual void MarketQuote()
         {
             string PreReceiveMsg = "";
-            while (true)
+            string endpoint = _dsEndpoint;
+
+            _dsWorkerStopped.Reset();
+            _Log.LogInfo("[行情循环] 数据源行情循环启动，Endpoint=" + endpoint);
+
+            try
             {
-                string results = _Subscriber.ReceiveFrameString();
-                if (results.Equals(PreReceiveMsg) || string.IsNullOrEmpty(results))
+                // SubscriberSocket 的创建、Connect、Subscribe、Receive、Disconnect、Dispose
+                // 全部在当前 BackgroundWorker 线程执行，避免 NetMQ socket 跨线程访问。
+                _Subscriber = new SubscriberSocket();
+                _Subscriber.Options.TcpKeepalive = true;
+                _Subscriber.Options.TcpKeepaliveIdle = new TimeSpan(5, 0, 0);
+                _Subscriber.Options.TcpKeepaliveInterval = new TimeSpan(0, 0, 1);
+                _Subscriber.Connect(endpoint);
+                _Subscriber.Subscribe("");
+
+                _IsDSConnectFlag = true;
+                RenderUI(buttonDSConnect, () =>
                 {
-                    continue;
-                }
-                else
+                    buttonDSConnect.Text = "数据源断开";
+                    buttonDSConnect.BackColor = Color.Green;
+                    label_Price_Connect.BackColor = Color.Green;
+                    label_DSName.Text = _Config.DSType;
+                    label_Price_Connect.Text = "已连接";
+                });
+                _Log.LogInfo("[行情循环] 数据源连接成功: " + endpoint);
+
+                while (true)
                 {
-                    PreReceiveMsg = results;
-                }
-                _EA2_TradeRecord = results;
-                string[] split = results.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                //参数说明：Gold 1893.4 1893.6 145158
-                //_logger.Info("OnMarketQuote :" + split[0] + " " + split[1] + " " + split[2] + " " + split[3]);
-                //_Log.LogInfo("接收到消息时间："+DateTime.Now.ToString("HH:mm:ss.fff"));
-                _DSQuote.NewQuoute(split[0], double.Parse(split[1]), double.Parse(split[2]));
-                if (_TradePara.EventFlag)
-                {
-                    _DSQuote.NewQuoteForEventTrade(double.Parse(split[1]), _StrategyConfig.dataTimeDuration, _StrategyConfig.dataPriceDiffSize, _StrategyConfig.dataPriceDiffTotalCount);
-                }
-                //买多单，使用报价是Quote.Ask
-                //卖空单，使用报价是Quote.Bid
-                //买多平仓单，使用报价是Quote.Bid
-                //卖空平仓单，使用报价是Quote.A
-                //自动交易已启动并且上次执行已完成
-                if (_DSQuote.ValueChanged && _EnableAutoTrade && !isExecuting && (chkBuyOpen.Checked || chkSellOpen.Checked || chkBuyClose.Checked || chkSellClose.Checked))
-                {
-                    int tradeType = -1;
-                    isExecuting = true;
-                    //非事件策略
-                    if (!_TradePara.EventFlag)
+                    if (_dsStopRequested || bgwMarketQuote.CancellationPending)
                     {
-                        //自动买多开仓
-                        if (chkBuyOpen.Checked && (_DSQuote.BidDiff[0] >= (double)_TradePara.BuyOpen))
-                        {
-                            tradeType = 1;
-                        }
-                        //自动卖空开仓
-                        if (chkSellOpen.Checked && (_DSQuote.BidDiff[0] <= (double)(-_TradePara.SellOpen)))
-                        {
-                            tradeType = 2;
-                        }
-                        //自动平仓
-                        if (chkBuyClose.Checked && _DSQuote.BidDiff[0] <= (double)-_TradePara.BuyClose)
-                        {
-                            // buy close
-                            tradeType = 3;
-                        }
-                        if (chkSellClose.Checked && _DSQuote.BidDiff[0] >= (double)_TradePara.SellClose)
-                        {
-                            //sell close
-                            tradeType = 4;
-                        }
-                    }
-                    //事件交易策略
-                    if (_TradePara.EventFlag)
-                    {
-                        tradeType = EventAnalysis();
-                        if (tradeType > 0 && _DSQuote.BidDiffForEventTrade != null)
-                        {
-                            string PriceDiffList = string.Join(",", _DSQuote.BidDiffForEventTrade);
-                            _DSQuote.BidDiffForEventTrade.Clear();
-                            //_Log.LogInfo("事件单[tradeType=" + tradeType + "][" + PriceDiffList + "](1:BUY,2:SELL,3:CLOSE_BUY,4:CLOSE_SELL)");
-                        }
-                    }
-                    //平台价格差
-                    if (_TradePara.QuotaCheckFlag)
-                    {
-                        if (string.Equals(_BrokerAndDSPriceDiffType, "1"))
-                        {
-                            tradeType = 1;
-                        }
-                        if (string.Equals(_BrokerAndDSPriceDiffType, "-1"))
-                        {
-                            tradeType = 2;
-                        }
+                        _Log.LogInfo("[行情循环] 收到取消请求，行情循环正常退出");
+                        return;
                     }
 
-                    //跳次分析完成，执行订单逻辑
-                    //上次订单已执行完成（订单返回更新状态后才算订单执行完成）
-                    //if (isOrderCompleted && tradeType != -1 && (DateTime.Now- priceCount).TotalSeconds >= 5 && TradeUtils.isTradeTime())
-                    if (isOrderCompleted && tradeType != -1)
+                    string results;
+                    try
                     {
-                        //执行自动交易订单时，暂时取消自动交易功能，待订单完成后再回复自动交易                       
-                        isOrderCompleted = false;
-                        _IsAutoOperationFlag = true;
-                        _BrokerAndDSPriceDiffType = "0";
-                        //自动交易已启动，并且在锁仓情况下执行
-                        if (checkBox_AutoLock.Checked)
+                        if (!_Subscriber.TryReceiveFrameString(TimeSpan.FromMilliseconds(500), out results))
                         {
-                            //_Log.LogInfo("执行自动订单开始");
-                            _OrderCreateType = "H";
-                            executedFlag = false;
-                            switch (_Platform.PlatformNo)
+                            continue; // 超时无数据，回到循环顶部检查取消标记
+                        }
+                    }
+                    catch (ObjectDisposedException ex)
+                    {
+                        _logger.Error("[行情循环] 数据源套接字已释放，行情循环退出: " + ex.Message);
+                        _Log.LogInfo("[行情循环] 数据源套接字已释放，行情循环退出");
+                        return;
+                    }
+                    catch (TerminatingException ex)
+                    {
+                        _logger.Error("[行情循环] NetMQ 上下文已终止，行情循环退出: " + ex.Message);
+                        _Log.LogInfo("[行情循环] NetMQ 上下文已终止，行情循环退出");
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        // 其它接收异常（例如短暂的网络问题）不退出循环，稍等后重试。
+                        _logger.Error("[行情循环] 接收行情异常: " + ex.Message + "  " + ex.StackTrace);
+                        Thread.Sleep(200);
+                        continue;
+                    }
+
+                    if (string.IsNullOrEmpty(results) || results.Equals(PreReceiveMsg))
+                    {
+                        continue;
+                    }
+                    PreReceiveMsg = results;
+
+                    try
+                    {
+                        _EA2_TradeRecord = results;
+                        string[] split = results.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                        //参数说明：Gold 1893.4 1893.6 145158
+                        //_logger.Info("OnMarketQuote :" + split[0] + " " + split[1] + " " + split[2] + " " + split[3]);
+                        //_Log.LogInfo("接收到消息时间："+DateTime.Now.ToString("HH:mm:ss.fff"));
+
+                        // 报文校验：至少需要"品种 Bid Ask"三个字段，且价格可解析。
+                        // 原来直接 split[1]/split[2] + double.Parse，坏报文会抛异常终止整个循环。
+                        if (split.Length < 3 ||
+                            !double.TryParse(split[1], NumberStyles.Float, CultureInfo.InvariantCulture, out double bid) ||
+                            !double.TryParse(split[2], NumberStyles.Float, CultureInfo.InvariantCulture, out double ask))
+                        {
+                            _logger.Warn("[行情循环] 忽略格式异常的行情报文: " + results);
+                            continue;
+                        }
+
+                        _DSQuote.NewQuoute(split[0], bid, ask);
+                        if (_TradePara.EventFlag)
+                        {
+                            lock (_eventTradeLock)
                             {
-                                case (int)Comm.Enum.Platform.MF4:
-                                    _MF4._OrderCreateType = _OrderCreateType;
-                                    executedFlag = _MF4.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
-                                    break;
-                                case (int)Comm.Enum.Platform.MT4:
-                                    _MT4._OrderCreateType = _OrderCreateType;
-                                    executedFlag = _MT4.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
-                                    break;
-                                case (int)Comm.Enum.Platform.V4:
-                                    _V4._OrderCreateType = _OrderCreateType;
-                                    executedFlag = _V4.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
-                                    break;
-                                case (int)Comm.Enum.Platform.MT5:
-                                    _MT5._OrderCreateType = _OrderCreateType;
-                                    executedFlag = _MT5.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
-                                    break;
-                            }
-                            //发送订单完成后，停止自动交易，待订单更新后修改自动交易标识
-                            if (executedFlag)
-                            {
-                                isOrderCompleted = true;
-                                _Log.LogInfo("执行自动订单完成");
-                            }
-                            else
-                            {
-                                isOrderCompleted = true;
-                                _Log.LogInfo("无自动订单生成");
+                                _DSQuote.NewQuoteForEventTrade(bid, _StrategyConfig.dataTimeDuration, _StrategyConfig.dataPriceDiffSize, _StrategyConfig.dataPriceDiffTotalCount);
                             }
                         }
-                        //独立锁单,即不依赖于主窗口发送的锁单消息，只需要根据跳价自动进行锁单操作
-                        else if (checkBoxIndLock.Checked)
+                        //买多单，使用报价是Quote.Ask
+                        //卖空单，使用报价是Quote.Bid
+                        //买多平仓单，使用报价是Quote.Bid
+                        //卖空平仓单，使用报价是Quote.A
+                        //自动交易已启动并且上次执行已完成
+                        if (_DSQuote.ValueChanged && _EnableAutoTrade &&
+                            (chkBuyOpen.Checked || chkSellOpen.Checked || chkBuyClose.Checked || chkSellClose.Checked) &&
+                            TryBeginExecuting())
                         {
-                            //_Log.LogInfo("执行独立锁单");
-                            _OrderCreateType = "C";
-                            switch (_Platform.PlatformNo)
+                            try
                             {
-                                case (int)Comm.Enum.Platform.MF4:
-                                    _MF4._OrderCreateType = _OrderCreateType;
-                                    break;
-                                case (int)Comm.Enum.Platform.MT4:
-                                    _MT4._OrderCreateType = _OrderCreateType;
-                                    break;
-                                case (int)Comm.Enum.Platform.V4:
-                                    _V4._OrderCreateType = _OrderCreateType;
-                                    break;
-                                case (int)Comm.Enum.Platform.MT5:
-                                    _MT5._OrderCreateType = _OrderCreateType;
-                                    break;
+                                int tradeType = -1;
+                                //非事件策略
+                                if (!_TradePara.EventFlag)
+                                {
+                                    //自动买多开仓
+                                    if (chkBuyOpen.Checked && (_DSQuote.BidDiff[0] >= (double)_TradePara.BuyOpen))
+                                    {
+                                        tradeType = 1;
+                                    }
+                                    //自动卖空开仓
+                                    if (chkSellOpen.Checked && (_DSQuote.BidDiff[0] <= (double)(-_TradePara.SellOpen)))
+                                    {
+                                        tradeType = 2;
+                                    }
+                                    //自动平仓
+                                    if (chkBuyClose.Checked && _DSQuote.BidDiff[0] <= (double)-_TradePara.BuyClose)
+                                    {
+                                        // buy close
+                                        tradeType = 3;
+                                    }
+                                    if (chkSellClose.Checked && _DSQuote.BidDiff[0] >= (double)_TradePara.SellClose)
+                                    {
+                                        //sell close
+                                        tradeType = 4;
+                                    }
+                                }
+                                //事件交易策略
+                                if (_TradePara.EventFlag)
+                                {
+                                    lock (_eventTradeLock)
+                                    {
+                                        tradeType = EventAnalysis();
+                                        if (tradeType > 0 && _DSQuote.BidDiffForEventTrade != null)
+                                        {
+                                            string PriceDiffList = string.Join(",", _DSQuote.BidDiffForEventTrade);
+                                            _DSQuote.BidDiffForEventTrade.Clear();
+                                            //_Log.LogInfo("事件单[tradeType=" + tradeType + "][" + PriceDiffList + "](1:BUY,2:SELL,3:CLOSE_BUY,4:CLOSE_SELL)");
+                                        }
+                                    }
+                                }
+                                //平台价格差
+                                if (_TradePara.QuotaCheckFlag)
+                                {
+                                    if (string.Equals(_BrokerAndDSPriceDiffType, "1"))
+                                    {
+                                        tradeType = 1;
+                                    }
+                                    if (string.Equals(_BrokerAndDSPriceDiffType, "-1"))
+                                    {
+                                        tradeType = 2;
+                                    }
+                                }
+
+                                //跳次分析完成，执行订单逻辑
+                                //上次订单已执行完成（订单返回更新状态后才算订单执行完成）
+                                //if (isOrderCompleted && tradeType != -1 && (DateTime.Now- priceCount).TotalSeconds >= 5 && TradeUtils.isTradeTime())
+                                if (isOrderCompleted && tradeType != -1)
+                                {
+                                    //执行自动交易订单时，暂时取消自动交易功能，待订单完成后再回复自动交易                       
+                                    isOrderCompleted = false;
+                                    _IsAutoOperationFlag = true;
+                                    _BrokerAndDSPriceDiffType = "0";
+                                    //自动交易已启动，并且在锁仓情况下执行
+                                    if (checkBox_AutoLock.Checked)
+                                    {
+                                        //_Log.LogInfo("执行自动订单开始");
+                                        _OrderCreateType = "H";
+                                        executedFlag = false;
+                                        switch (_Platform.PlatformNo)
+                                        {
+                                            case (int)Comm.Enum.Platform.MF4:
+                                                _MF4._OrderCreateType = _OrderCreateType;
+                                                executedFlag = _MF4.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
+                                                break;
+                                            case (int)Comm.Enum.Platform.MT4:
+                                                _MT4._OrderCreateType = _OrderCreateType;
+                                                executedFlag = _MT4.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
+                                                break;
+                                            case (int)Comm.Enum.Platform.V4:
+                                                _V4._OrderCreateType = _OrderCreateType;
+                                                executedFlag = _V4.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
+                                                break;
+                                            case (int)Comm.Enum.Platform.MT5:
+                                                _MT5._OrderCreateType = _OrderCreateType;
+                                                executedFlag = _MT5.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
+                                                break;
+                                        }
+                                        //发送订单完成后，停止自动交易，待订单更新后修改自动交易标识
+                                        if (executedFlag)
+                                        {
+                                            isOrderCompleted = true;
+                                            _Log.LogInfo("执行自动订单完成");
+                                        }
+                                        else
+                                        {
+                                            isOrderCompleted = true;
+                                            _Log.LogInfo("无自动订单生成");
+                                        }
+                                    }
+                                    //独立锁单,即不依赖于主窗口发送的锁单消息，只需要根据跳价自动进行锁单操作
+                                    else if (checkBoxIndLock.Checked)
+                                    {
+                                        //_Log.LogInfo("执行独立锁单");
+                                        _OrderCreateType = "C";
+                                        switch (_Platform.PlatformNo)
+                                        {
+                                            case (int)Comm.Enum.Platform.MF4:
+                                                _MF4._OrderCreateType = _OrderCreateType;
+                                                break;
+                                            case (int)Comm.Enum.Platform.MT4:
+                                                _MT4._OrderCreateType = _OrderCreateType;
+                                                break;
+                                            case (int)Comm.Enum.Platform.V4:
+                                                _V4._OrderCreateType = _OrderCreateType;
+                                                break;
+                                            case (int)Comm.Enum.Platform.MT5:
+                                                _MT5._OrderCreateType = _OrderCreateType;
+                                                break;
+                                        }
+                                        string AutoLockTradeSide = "";
+                                        switch (tradeType)
+                                        {
+                                            case 1:
+                                                AutoLockTradeSide = "SELL";
+                                                break;
+                                            case 2:
+                                                AutoLockTradeSide = "BUY";
+                                                break;
+                                            case 3:
+                                                //独立锁单平仓只能是单边操作，所以出现买多的时候就直接平多单，对应主窗口平空单
+                                                AutoLockTradeSide = "SELL_CLOSE";
+                                                break;
+                                            case 4:
+                                                //独立锁单平仓只能是单边操作，所以出现买空的时候就直接平空单，对应主窗口平多单
+                                                AutoLockTradeSide = "BUY_CLOSE";
+                                                break;
+                                        }
+                                        executedFlag = AutoLockProcess(AutoLockTradeSide);
+                                        //发送订单完成后，停止自动交易，待订单更新后修改自动交易标识
+                                        if (!executedFlag)
+                                        {
+                                            isOrderCompleted = true;
+                                            _Log.LogInfo("无独立锁单生成");
+                                        }
+                                    }
+                                    else
+                                    {
+                                        _Log.LogInfo("未选择消息锁单或独立锁单，不执行自动订单操作");
+                                        isOrderCompleted = true;
+                                    }
+                                    //取消勾选，不用停止自动交易
+                                    CancelCheck();
+                                    _PriceCount = DateTime.Now;
+                                }
+                                // V20261022_EVENT_KEEP_CHECK：事件模式由 EventAnalysis 判断开平仓。
+                                // CancelCheckForSelected 使用的是非事件模式的倒平阈值（BuyClose/SellClose），
+                                // 第一个达到阈值的跳次（如 -6）就会取消全部勾选，导致后续跳次凑齐
+                                // （如 [-5,-6] 满足 2,5,2,2）时勾选已被清空、总开关进不去，事件单永远无法触发。
+                                // 因此事件模式下不再调用。
+                                if (!_TradePara.EventFlag)
+                                {
+                                    CancelCheckForSelected();
+                                }
                             }
-                            string AutoLockTradeSide = "";
-                            switch (tradeType)
+                            catch (Exception ex)
                             {
-                                case 1:
-                                    AutoLockTradeSide = "SELL";
-                                    break;
-                                case 2:
-                                    AutoLockTradeSide = "BUY";
-                                    break;
-                                case 3:
-                                    //独立锁单平仓只能是单边操作，所以出现买多的时候就直接平多单，对应主窗口平空单
-                                    AutoLockTradeSide = "SELL_CLOSE";
-                                    break;
-                                case 4:
-                                    //独立锁单平仓只能是单边操作，所以出现买空的时候就直接平空单，对应主窗口平多单
-                                    AutoLockTradeSide = "BUY_CLOSE";
-                                    break;
-                            }
-                            executedFlag = AutoLockProcess(AutoLockTradeSide);
-                            //发送订单完成后，停止自动交易，待订单更新后修改自动交易标识
-                            if (!executedFlag)
-                            {
+                                // 下单过程异常：恢复订单完成标记，避免后续永远不再下单。
                                 isOrderCompleted = true;
-                                _Log.LogInfo("无独立锁单生成");
+                                _logger.Error("[行情循环] 跳次分析/下单异常: " + ex.Message + "  " + ex.StackTrace);
+                                _Log.LogInfo("[行情循环] 跳次分析/下单异常: " + ex.Message);
+                            }
+                            finally
+                            {
+                                EndExecuting();
+                            }
+                        }
+                        if (_TradePara.EventFlag)
+                        {
+                            if (_DSQuote._EventValuehanged)
+                            {
+                                OutputDiffList();
+                                Task.Run(() =>
+                                {
+                                    if ((_MT4 != null && _MT4.isConnect()) || (_MT5 != null && _MT5.isConnect()))
+                                    {
+                                        UpdateBrokerAndDSPriceDiff();
+                                        BrokerPriceBlockAlarm();
+                                    }
+                                });
                             }
                         }
                         else
                         {
-                            _Log.LogInfo("未选择消息锁单或独立锁单，不执行自动订单操作");
-                            isOrderCompleted = true;
+                            if (_DSQuote.ValueChanged)
+                            {
+                                OutputDiffList();
+                                Task.Run(() =>
+                                {
+                                    if ((_MT4 != null && _MT4.isConnect()) || (_MT5 != null && _MT5.isConnect()))
+                                    {
+                                        UpdateBrokerAndDSPriceDiff();
+                                        BrokerPriceBlockAlarm();
+                                    }
+                                });
+                            }
                         }
-                        //取消勾选，不用停止自动交易
-                        CancelCheck();
-                        _PriceCount = DateTime.Now;
+                        UpdateDSQuote();
                     }
-                    CancelCheckForSelected();
-                    isExecuting = false;
-                }
-                if (_TradePara.EventFlag)
-                {
-                    if (_DSQuote._EventValuehanged)
+                    catch (Exception ex)
                     {
-                        OutputDiffList();
-                        Task.Run(() =>
+                        // 单条行情处理失败只丢弃该条，不能让整个行情循环退出。
+                        _logger.Error("[行情循环] 处理行情异常，已跳过该条行情: [" + results + "] " + ex.Message + "  " + ex.StackTrace);
+                        _Log.LogInfo("[行情循环] 处理行情异常，已跳过: " + ex.Message);
+                    }
+                    //Thread.Sleep(3);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("[行情循环] 数据源连接/接收线程异常: " + ex.Message + "  " + ex.StackTrace);
+                try { _Log.LogInfo("[行情循环] 数据源连接/接收异常: " + ex.Message); } catch { }
+            }
+            finally
+            {
+                try
+                {
+                    if (_Subscriber != null)
+                    {
+                        try { _Subscriber.Unsubscribe(""); } catch { }
+                        try { _Subscriber.Disconnect(endpoint); } catch { }
+                        try { _Subscriber.Dispose(); } catch { }
+                        _Subscriber = null;
+                    }
+                }
+                finally
+                {
+                    _IsDSConnectFlag = false;
+                    _dsWorkerStopped.Set();
+                    try
+                    {
+                        RenderUI(buttonDSConnect, () =>
                         {
-                            if ((_MT4 != null && _MT4.isConnect()) || (_MT5 != null && _MT5.isConnect()))
-                            {
-                                UpdateBrokerAndDSPriceDiff();
-                                BrokerPriceBlockAlarm();
-                            }
+                            buttonDSConnect.Text = "数据源连接";
+                            buttonDSConnect.BackColor = Color.Red;
+                            label_Price_Connect.BackColor = Color.Red;
+                            label_Price_Connect.Text = "断开";
                         });
                     }
+                    catch { }
+                    _Log.LogInfo("[行情循环] 数据源行情循环已结束");
                 }
-                else
-                {
-                    if (_DSQuote.ValueChanged)
-                    {
-                        OutputDiffList();
-                        Task.Run(() =>
-                        {
-                            if ((_MT4 != null && _MT4.isConnect()) || (_MT5 != null && _MT5.isConnect()))
-                            {
-                                UpdateBrokerAndDSPriceDiff();
-                                BrokerPriceBlockAlarm();
-                            }
-                        });
-                    }
-                }
-                UpdateDSQuote();
-                //Thread.Sleep(3);
             }
         }
         /// <summary>
@@ -1659,7 +2015,14 @@ namespace uClient
         public int EventAnalysis()
         {
             int tradeType = -1;
-            List<double> priceDiffList = _DSQuote.BidDiffForEventTrade;
+            // V20261026_MARKETQUOTE_LOOP_GUARD：遍历快照副本，原列表可能正被另一线程修改。
+            List<double> priceDiffList;
+            lock (_eventTradeLock)
+            {
+                priceDiffList = _DSQuote.BidDiffForEventTrade == null
+                    ? new List<double>()
+                    : new List<double>(_DSQuote.BidDiffForEventTrade);
+            }
             if (priceDiffList.Count >= _StrategyConfig.dataPriceDiffTotalCount)
             {
                 int dataPricePositive = 0;
@@ -1686,12 +2049,18 @@ namespace uClient
                     tradeType = 2;
                 }
                 //自动平仓
-                if (chkBuyClose.Checked && dataPricePositive >= _StrategyConfig.dataPricePositiveCount)
+                // V20261026_EVENT_CLOSE_DIRECTION_FIX：平仓方向与非事件模式保持一致——
+                //   非事件模式：BidDiff[0] <= -BuyClose（下跌）才平多单；BidDiff[0] >= SellClose（上涨）才平空单。
+                // 原代码把方向写反了：连续上涨触发平多单、连续下跌触发平空单，
+                // 导致出现 +6 等上涨跳次时执行了"自动买平"。
+                //买多平仓：连续下跌
+                if (chkBuyClose.Checked && dataPriceNegative >= _StrategyConfig.dataPricePositiveCount)
                 {
                     // buy close
                     tradeType = 3;
                 }
-                if (chkSellClose.Checked && dataPriceNegative >= _StrategyConfig.dataPricePositiveCount)
+                //卖空平仓：连续上涨
+                if (chkSellClose.Checked && dataPricePositive >= _StrategyConfig.dataPricePositiveCount)
                 {
                     //sell close
                     tradeType = 4;
@@ -1752,9 +2121,16 @@ namespace uClient
         {
             if (_TradePara.EventFlag)
             {
-                if (_DSQuote.BidDiffForEventTrade != null && _DSQuote.BidDiffForEventTrade.Count > 0)
+                string result = "";
+                lock (_eventTradeLock)
                 {
-                    string result = string.Join(",", _DSQuote.BidDiffForEventTrade);
+                    if (_DSQuote.BidDiffForEventTrade != null && _DSQuote.BidDiffForEventTrade.Count > 0)
+                    {
+                        result = string.Join(",", _DSQuote.BidDiffForEventTrade);
+                    }
+                }
+                if (result.Length > 0)
+                {
                     string BidDiffMsg = DateTime.Now.ToString("HH:mm:ss") + " " + result;
                     WriteBiddViewList(BidDiffMsg);
                 }
@@ -2272,8 +2648,105 @@ namespace uClient
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
+        private void ProcessMT5OrderUpdate()
+        {
+            if (_MT5 == null || _MT5._OrderUpdateEventArgs == null) return;
+            bool isTerminal = _MT5._OrderUpdateEventArgs.Type == UpdateType.MarketOpen ||
+                              _MT5._OrderUpdateEventArgs.Type == UpdateType.MarketClose;
+            string orderId = GetLockOrderId(_LockReceiveMsg);
+            if (isTerminal) _LockReceiveMsg = "";
+            _MT5.OrderUpdate(_IsAutoOperationFlag, _SendTime, orderId);
+            if (_MT5._OrderUpdateEventArgs != null)
+            {
+                mtapi.mt5.Order order = _MT5._OrderUpdateEventArgs.Order;
+                if (order == null)
+                {
+                    _Log.LogInfo("[MT5][ORDER_UPDATE_NO_ORDER] type=" + _MT5._OrderUpdateEventArgs.Type);
+                    return;
+                }
+                switch (_MT5._OrderUpdateEventArgs.Type)
+                {
+                    case UpdateType.MarketOpen:
+                        //发送锁单消息
+                        //参数说明M|BUY/SELL/SELL_CLOSE/BUY_CLOSE|Lot|Price|Point
+                        if (_IsAutoOperationFlag)
+                        {
+                            string sendMessage = string.Format("M|{0}|{1}|{2}|{3}|{4}|{5}", order.OrderType == mtapi.mt5.OrderType.Buy ? "SELL" : "BUY", order.Lots, order.OpenPrice,
+                                order.OrderType == mtapi.mt5.OrderType.Buy ? _TradePara.BuyOpen : _TradePara.SellOpen, _TradePara.OnlyCloseFlag ? "OCO" : "CO", order.Ticket);
+                            if (string.Equals(_OrderCreateType, "H"))
+                            {
+                                _MasterPublisher.SendFrame(sendMessage);
+                                _Log.LogInfo("发送自动锁单消息:" + sendMessage);
+                            }
+                            StartAutoTrade();
+                        }
+                        break;
+                    case UpdateType.MarketClose:
+                        //发送锁单消息
+                        if (_IsAutoOperationFlag)
+                        {
+                            string sendMessage = string.Format("M|{0}|{1}|{2}|{3}|{4}|{5}", order.OrderType == mtapi.mt5.OrderType.Buy ? "SELL_CLOSE" : "BUY_CLOSE", order.Lots, order.OpenPrice,
+                                order.OrderType == mtapi.mt5.OrderType.Buy ? _TradePara.BuyClose : _TradePara.SellClose, _TradePara.OnlyCloseFlag ? "OCO" : "CO", order.Ticket);
+                            if (string.Equals(_OrderCreateType, "H"))
+                            {
+                                _MasterPublisher.SendFrame(sendMessage);
+                                _Log.LogInfo("发送自动锁单消息:" + sendMessage);
+                                if (_TradePara.OnlyCloseFlag)
+                                {
+                                    StopAutoTrade();
+                                }
+                                else
+                                {
+                                    StartAutoTrade();
+                                }
+                            }
+                            if (string.Equals(_OrderCreateType, "C"))
+                            {
+                                //C端不再判断[OnlyCloseFlag]配置
+                                if (_OnlyCloseOrder)
+                                {
+                                    StartAutoTrade();
+                                }
+                                else
+                                {
+                                    StopAutoTrade();
+                                }
+                            }
+                        }
+                        break;
+                    default:
+                        // PendingOpen/PendingClose are nonterminal. Do not stop trading
+                        // or mark the request complete merely because progress was reported.
+                        _Log.LogInfo("[MT5][ORDER_INTERMEDIATE] type=" + _MT5._OrderUpdateEventArgs.Type);
+                        break;
+                }
+            }
+            if (_MT5._OrderUpdateEventArgs.Type == UpdateType.MarketOpen ||
+                _MT5._OrderUpdateEventArgs.Type == UpdateType.MarketClose)
+            {
+                isOrderCompleted = true;
+                _Log.LogInfo("[MT5][ORDER_TERMINAL] 执行订单结束");
+            }
+        }
+
         public void bgwOrderUpdate_DoWork(object sender, DoWorkEventArgs e)
         {
+            // MT5 must consume every callback, including those received while the worker is busy.
+            if (_Platform != null && _Platform.PlatformNo == (int)Comm.Enum.Platform.MT5)
+            {
+                mtapi.mt5.OrderUpdate nextUpdate;
+                while (_MT5 != null && _MT5.TryDequeueOrderUpdate(out nextUpdate))
+                {
+                    _MT5._OrderUpdateEventArgs = nextUpdate;
+                    try { ProcessMT5OrderUpdate(); }
+                    catch (Exception ex)
+                    {
+                        _logger.Error("[MT5][ORDER_UPDATE_FAILED] " + ex);
+                        _Log.LogInfo("[MT5][ORDER_UPDATE_FAILED] " + ex.Message);
+                    }
+                }
+                return;
+            }
             _CloseOrderTime = DateTime.Now;
             string orderId = GetLockOrderId(_LockReceiveMsg);
             _LockReceiveMsg = "";
@@ -2402,64 +2875,80 @@ namespace uClient
                     _MF4._SystemMessage = null;
                     break;
                 case (int)Comm.Enum.Platform.MT4:
-                    if (_MT4._OrderProgressEventArgs.Exception == null)
+                    TradingAPI.MT4Server.OrderProgressEventArgs mt4Progress;
+                    while (_MT4 != null && _MT4.TryDequeueOrderProgress(out mt4Progress))
                     {
-                        _MT4.OrderUpdate(_IsAutoOperationFlag, _SendTime, orderId);
-                        Order order = _MT4._OrderProgressEventArgs.Order;
-                        switch (_MT4._OrderProgressEventArgs.Type)
+                        _MT4._OrderProgressEventArgs = mt4Progress;
+                        try
                         {
-                            case TradingAPI.MT4Server.ProgressType.Opened:
-                                //发送锁单消息
-                                //参数说明M|BUY/SELL/SELL_CLOSE/BUY_CLOSE|Lot|Price|Point
-                                if (_IsAutoOperationFlag)
-                                {
-                                    string sendMessage = string.Format("M|{0}|{1}|{2}|{3}|{4}|{5}", order.Type == Op.Buy ? "SELL" : "BUY", order.Lots, order.OpenPrice,
-                                        order.Type == Op.Buy ? _TradePara.BuyOpen : _TradePara.SellOpen, _TradePara.OnlyCloseFlag ? "OCO" : "CO", order.Ticket);
-                                    if (string.Equals(_OrderCreateType, "H"))
+                            if (mt4Progress.Exception != null || mt4Progress.Order == null)
+                            {
+                                _Log.LogInfo("[MT4][ORDER_CALLBACK] " + mt4Progress.Type +
+                                    " exception=" + (mt4Progress.Exception == null ? "none" : mt4Progress.Exception.Message));
+                                continue;
+                            }
+                            _MT4.OrderUpdate(_IsAutoOperationFlag, _SendTime, orderId);
+                            Order order = _MT4._OrderProgressEventArgs.Order;
+                            switch (_MT4._OrderProgressEventArgs.Type)
+                            {
+                                case TradingAPI.MT4Server.ProgressType.Opened:
+                                    //发送锁单消息
+                                    //参数说明M|BUY/SELL/SELL_CLOSE/BUY_CLOSE|Lot|Price|Point
+                                    if (_IsAutoOperationFlag)
                                     {
-                                        _MasterPublisher.SendFrame(sendMessage);
-                                        _Log.LogInfo("发送自动锁单消息:" + sendMessage);
+                                        string sendMessage = string.Format("M|{0}|{1}|{2}|{3}|{4}|{5}", order.Type == Op.Buy ? "SELL" : "BUY", order.Lots, order.OpenPrice,
+                                            order.Type == Op.Buy ? _TradePara.BuyOpen : _TradePara.SellOpen, _TradePara.OnlyCloseFlag ? "OCO" : "CO", order.Ticket);
+                                        if (string.Equals(_OrderCreateType, "H"))
+                                        {
+                                            _MasterPublisher.SendFrame(sendMessage);
+                                            _Log.LogInfo("发送自动锁单消息:" + sendMessage);
+                                        }
+                                        StartAutoTrade();
                                     }
-                                    StartAutoTrade();
-                                }
-                                break;
-                            case TradingAPI.MT4Server.ProgressType.Closed:
-                                //发送锁单消息
-                                if (_IsAutoOperationFlag)
-                                {
-                                    string sendMessage = string.Format("M|{0}|{1}|{2}|{3}|{4}|{5}", order.Type == Op.Buy ? "SELL_CLOSE" : "BUY_CLOSE", order.Lots, order.OpenPrice,
-                                        order.Type == Op.Buy ? _TradePara.BuyClose : _TradePara.SellClose, _TradePara.OnlyCloseFlag ? "OCO" : "CO", order.Ticket);
-                                    if (string.Equals(_OrderCreateType, "H"))
+                                    break;
+                                case TradingAPI.MT4Server.ProgressType.Closed:
+                                    //发送锁单消息
+                                    if (_IsAutoOperationFlag)
                                     {
-                                        _MasterPublisher.SendFrame(sendMessage);
-                                        _Log.LogInfo("发送自动锁单消息:" + sendMessage);
-                                        if (_TradePara.OnlyCloseFlag)
+                                        string sendMessage = string.Format("M|{0}|{1}|{2}|{3}|{4}|{5}", order.Type == Op.Buy ? "SELL_CLOSE" : "BUY_CLOSE", order.Lots, order.OpenPrice,
+                                            order.Type == Op.Buy ? _TradePara.BuyClose : _TradePara.SellClose, _TradePara.OnlyCloseFlag ? "OCO" : "CO", order.Ticket);
+                                        if (string.Equals(_OrderCreateType, "H"))
                                         {
-                                            StopAutoTrade();
+                                            _MasterPublisher.SendFrame(sendMessage);
+                                            _Log.LogInfo("发送自动锁单消息:" + sendMessage);
+                                            if (_TradePara.OnlyCloseFlag)
+                                            {
+                                                StopAutoTrade();
+                                            }
+                                            else
+                                            {
+                                                StartAutoTrade();
+                                            }
                                         }
-                                        else
+                                        if (string.Equals(_OrderCreateType, "C"))
                                         {
-                                            StartAutoTrade();
+                                            //C端不再判断[OnlyCloseFlag]配置
+                                            if (_OnlyCloseOrder)
+                                            {
+                                                StartAutoTrade();
+                                            }
+                                            else
+                                            {
+                                                StopAutoTrade();
+                                            }
                                         }
                                     }
-                                    if (string.Equals(_OrderCreateType, "C"))
-                                    {
-                                        //C端不再判断[OnlyCloseFlag]配置
-                                        if (_OnlyCloseOrder)
-                                        {
-                                            StartAutoTrade();
-                                        }
-                                        else
-                                        {
-                                            StopAutoTrade();
-                                        }
-                                    }
-                                }
-                                break;
-                            default:
-                                _Log.LogInfo("[异常参数][_OrderProgressEventArgs.Type=" + _MT4._OrderProgressEventArgs.Type + "]");
-                                StopAutoTrade();
-                                break;
+                                    break;
+                                default:
+                                    _Log.LogInfo("[异常参数][_OrderProgressEventArgs.Type=" + _MT4._OrderProgressEventArgs.Type + "]");
+                                    StopAutoTrade();
+                                    break;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Error("[MT4][ORDER_UPDATE_FAILED] " + ex);
+                            _Log.LogInfo("[MT4][ORDER_UPDATE_FAILED] " + ex.Message);
                         }
                     }
                     break;
@@ -2529,66 +3018,6 @@ namespace uClient
                     //_V4.UpdatePositionGrid();
                     break;
                 case (int)Comm.Enum.Platform.MT5:
-                    if (_MT5._OrderUpdateEventArgs != null)
-                    {
-                        _MT5.OrderUpdate(_IsAutoOperationFlag, _SendTime, orderId);
-                        mtapi.mt5.Order order = _MT5._OrderUpdateEventArgs.Order;
-                        switch (_MT5._OrderUpdateEventArgs.Type)
-                        {
-                            case UpdateType.MarketOpen:
-                                //发送锁单消息
-                                //参数说明M|BUY/SELL/SELL_CLOSE/BUY_CLOSE|Lot|Price|Point
-                                if (_IsAutoOperationFlag)
-                                {
-                                    string sendMessage = string.Format("M|{0}|{1}|{2}|{3}|{4}|{5}", order.OrderType == mtapi.mt5.OrderType.Buy ? "SELL" : "BUY", order.Lots, order.OpenPrice,
-                                        order.OrderType == mtapi.mt5.OrderType.Buy ? _TradePara.BuyOpen : _TradePara.SellOpen, _TradePara.OnlyCloseFlag ? "OCO" : "CO", order.Ticket);
-                                    if (string.Equals(_OrderCreateType, "H"))
-                                    {
-                                        _MasterPublisher.SendFrame(sendMessage);
-                                        _Log.LogInfo("发送自动锁单消息:" + sendMessage);
-                                    }
-                                    StartAutoTrade();
-                                }
-                                break;
-                            case UpdateType.MarketClose:
-                                //发送锁单消息
-                                if (_IsAutoOperationFlag)
-                                {
-                                    string sendMessage = string.Format("M|{0}|{1}|{2}|{3}|{4}|{5}", order.OrderType == mtapi.mt5.OrderType.Buy ? "SELL_CLOSE" : "BUY_CLOSE", order.Lots, order.OpenPrice,
-                                        order.OrderType == mtapi.mt5.OrderType.Buy ? _TradePara.BuyClose : _TradePara.SellClose, _TradePara.OnlyCloseFlag ? "OCO" : "CO", order.Ticket);
-                                    if (string.Equals(_OrderCreateType, "H"))
-                                    {
-                                        _MasterPublisher.SendFrame(sendMessage);
-                                        _Log.LogInfo("发送自动锁单消息:" + sendMessage);
-                                        if (_TradePara.OnlyCloseFlag)
-                                        {
-                                            StopAutoTrade();
-                                        }
-                                        else
-                                        {
-                                            StartAutoTrade();
-                                        }
-                                    }
-                                    if (string.Equals(_OrderCreateType, "C"))
-                                    {
-                                        //C端不再判断[OnlyCloseFlag]配置
-                                        if (_OnlyCloseOrder)
-                                        {
-                                            StartAutoTrade();
-                                        }
-                                        else
-                                        {
-                                            StopAutoTrade();
-                                        }
-                                    }
-                                }
-                                break;
-                            default:
-                                _Log.LogInfo("[异常参数][_OrderUpdateEventArgs.Type=" + _MT5._OrderUpdateEventArgs.Type + "]");
-                                StopAutoTrade();
-                                break;
-                        }
-                    }
                     break;
             }
             //只要执行了订单信息程序，就认为该订单已完成
@@ -2648,125 +3077,149 @@ namespace uClient
             //买多平仓单，使用报价是Quote.Bid
             //卖空平仓单，使用报价是Quote.A
             //自动交易已启动并且上次执行已完成
-            if (_TradePara.EventFlag && _DSQuote._EventValuehanged && _EnableAutoTrade && !isExecuting && (chkBuyOpen.Checked || chkSellOpen.Checked || chkBuyClose.Checked || chkSellClose.Checked))
+            if (_TradePara.EventFlag && _DSQuote._EventValuehanged && _EnableAutoTrade &&
+                (chkBuyOpen.Checked || chkSellOpen.Checked || chkBuyClose.Checked || chkSellClose.Checked) &&
+                TryBeginExecuting())
             {
-                int tradeType = -1;
-                isExecuting = true;
-                //事件交易策略
-                if (_TradePara.EventFlag)
+                try
                 {
-                    tradeType = EventAnalysis();
-                    if (tradeType > 0 && _DSQuote.BidDiffForEventTrade != null)
+                    int tradeType = -1;
+                    //事件交易策略
+                    if (_TradePara.EventFlag)
                     {
-                        string PriceDiffList = string.Join(",", _DSQuote.BidDiffForEventTrade);
-                        _DSQuote.BidDiffForEventTrade.Clear();
-                        //_Log.LogInfo("事件单[tradeType=" + tradeType + "][" + PriceDiffList + "](1:BUY,2:SELL,3:CLOSE_BUY,4:CLOSE_SELL)");
-                    }
-                }
-
-                //跳次分析完成，执行订单逻辑
-                //上次订单已执行完成（订单返回更新状态后才算订单执行完成）
-                //if (isOrderCompleted && tradeType != -1 && (DateTime.Now- priceCount).TotalSeconds >= 5 && TradeUtils.isTradeTime())
-                if (isOrderCompleted && tradeType != -1)
-                {
-                    //执行自动交易订单时，暂时取消自动交易功能，待订单完成后再回复自动交易                       
-                    isOrderCompleted = false;
-                    _IsAutoOperationFlag = true;
-                    _BrokerAndDSPriceDiffType = "0";
-                    //自动交易已启动，并且在锁仓情况下执行
-                    if (checkBox_AutoLock.Checked)
-                    {
-                        //_Log.LogInfo("执行自动订单开始");
-                        _OrderCreateType = "H";
-                        executedFlag = false;
-                        switch (_Platform.PlatformNo)
+                        lock (_eventTradeLock)
                         {
-                            case (int)Comm.Enum.Platform.MF4:
-                                _MF4._OrderCreateType = _OrderCreateType;
-                                executedFlag = _MF4.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
-                                break;
-                            case (int)Comm.Enum.Platform.MT4:
-                                _MT4._OrderCreateType = _OrderCreateType;
-                                executedFlag = _MT4.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
-                                break;
-                            case (int)Comm.Enum.Platform.V4:
-                                _V4._OrderCreateType = _OrderCreateType;
-                                executedFlag = _V4.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
-                                break;
-                            case (int)Comm.Enum.Platform.MT5:
-                                _MT5._OrderCreateType = _OrderCreateType;
-                                executedFlag = _MT5.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
-                                break;
+                            tradeType = EventAnalysis();
+                            if (tradeType > 0 && _DSQuote.BidDiffForEventTrade != null)
+                            {
+                                string PriceDiffList = string.Join(",", _DSQuote.BidDiffForEventTrade);
+                                _DSQuote.BidDiffForEventTrade.Clear();
+                                //_Log.LogInfo("事件单[tradeType=" + tradeType + "][" + PriceDiffList + "](1:BUY,2:SELL,3:CLOSE_BUY,4:CLOSE_SELL)");
+                            }
                         }
-                        //发送订单完成后，停止自动交易，待订单更新后修改自动交易标识
-                        if (executedFlag)
+                    }
+
+                    //跳次分析完成，执行订单逻辑
+                    //上次订单已执行完成（订单返回更新状态后才算订单执行完成）
+                    //if (isOrderCompleted && tradeType != -1 && (DateTime.Now- priceCount).TotalSeconds >= 5 && TradeUtils.isTradeTime())
+                    if (isOrderCompleted && tradeType != -1)
+                    {
+                        //执行自动交易订单时，暂时取消自动交易功能，待订单完成后再回复自动交易                       
+                        isOrderCompleted = false;
+                        _IsAutoOperationFlag = true;
+                        _BrokerAndDSPriceDiffType = "0";
+                        //自动交易已启动，并且在锁仓情况下执行
+                        if (checkBox_AutoLock.Checked)
                         {
-                            isOrderCompleted = true;
-                            _Log.LogInfo("执行自动订单完成");
+                            //_Log.LogInfo("执行自动订单开始");
+                            _OrderCreateType = "H";
+                            executedFlag = false;
+                            switch (_Platform.PlatformNo)
+                            {
+                                case (int)Comm.Enum.Platform.MF4:
+                                    _MF4._OrderCreateType = _OrderCreateType;
+                                    executedFlag = _MF4.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
+                                    break;
+                                case (int)Comm.Enum.Platform.MT4:
+                                    _MT4._OrderCreateType = _OrderCreateType;
+                                    executedFlag = _MT4.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
+                                    break;
+                                case (int)Comm.Enum.Platform.V4:
+                                    _V4._OrderCreateType = _OrderCreateType;
+                                    executedFlag = _V4.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
+                                    break;
+                                case (int)Comm.Enum.Platform.MT5:
+                                    _MT5._OrderCreateType = _OrderCreateType;
+                                    executedFlag = _MT5.AutoTradeTransaction2(tradeType, _IsAutoOperationFlag, out _SendTime);
+                                    break;
+                            }
+                            //发送订单完成后，停止自动交易，待订单更新后修改自动交易标识
+                            if (executedFlag)
+                            {
+                                isOrderCompleted = true;
+                                _Log.LogInfo("执行自动订单完成");
+                            }
+                            else
+                            {
+                                isOrderCompleted = true;
+                                _Log.LogInfo("无自动订单生成");
+                            }
+                        }
+                        //独立锁单,即不依赖于主窗口发送的锁单消息，只需要根据跳价自动进行锁单操作
+                        else if (checkBoxIndLock.Checked)
+                        {
+                            //_Log.LogInfo("执行独立锁单");
+                            _OrderCreateType = "C";
+                            switch (_Platform.PlatformNo)
+                            {
+                                case (int)Comm.Enum.Platform.MF4:
+                                    _MF4._OrderCreateType = _OrderCreateType;
+                                    break;
+                                case (int)Comm.Enum.Platform.MT4:
+                                    _MT4._OrderCreateType = _OrderCreateType;
+                                    break;
+                                case (int)Comm.Enum.Platform.V4:
+                                    _V4._OrderCreateType = _OrderCreateType;
+                                    break;
+                                case (int)Comm.Enum.Platform.MT5:
+                                    _MT5._OrderCreateType = _OrderCreateType;
+                                    break;
+                            }
+                            string AutoLockTradeSide = "";
+                            switch (tradeType)
+                            {
+                                case 1:
+                                    AutoLockTradeSide = "SELL";
+                                    break;
+                                case 2:
+                                    AutoLockTradeSide = "BUY";
+                                    break;
+                                case 3:
+                                    //独立锁单平仓只能是单边操作，所以出现买多的时候就直接平多单，对应主窗口平空单
+                                    AutoLockTradeSide = "SELL_CLOSE";
+                                    break;
+                                case 4:
+                                    //独立锁单平仓只能是单边操作，所以出现买空的时候就直接平空单，对应主窗口平多单
+                                    AutoLockTradeSide = "BUY_CLOSE";
+                                    break;
+                            }
+                            executedFlag = AutoLockProcess(AutoLockTradeSide);
+                            //发送订单完成后，停止自动交易，待订单更新后修改自动交易标识
+                            if (!executedFlag)
+                            {
+                                isOrderCompleted = true;
+                                _Log.LogInfo("无独立锁单生成");
+                            }
                         }
                         else
                         {
+                            _Log.LogInfo("未选择消息锁单或独立锁单，不执行自动订单操作");
                             isOrderCompleted = true;
-                            _Log.LogInfo("无自动订单生成");
                         }
+                        //取消勾选，不用停止自动交易
+                        CancelCheck();
+                        _PriceCount = DateTime.Now;
                     }
-                    //独立锁单,即不依赖于主窗口发送的锁单消息，只需要根据跳价自动进行锁单操作
-                    else if (checkBoxIndLock.Checked)
+                    // V20261022_EVENT_KEEP_CHECK：事件模式由 EventAnalysis 判断开平仓。
+                    // CancelCheckForSelected 使用的是非事件模式的倒平阈值（BuyClose/SellClose），
+                    // 第一个达到阈值的跳次（如 -6）就会取消全部勾选，导致后续跳次凑齐
+                    // （如 [-5,-6] 满足 2,5,2,2）时勾选已被清空、总开关进不去，事件单永远无法触发。
+                    // 因此事件模式下不再调用。
+                    if (!_TradePara.EventFlag)
                     {
-                        //_Log.LogInfo("执行独立锁单");
-                        _OrderCreateType = "C";
-                        switch (_Platform.PlatformNo)
-                        {
-                            case (int)Comm.Enum.Platform.MF4:
-                                _MF4._OrderCreateType = _OrderCreateType;
-                                break;
-                            case (int)Comm.Enum.Platform.MT4:
-                                _MT4._OrderCreateType = _OrderCreateType;
-                                break;
-                            case (int)Comm.Enum.Platform.V4:
-                                _V4._OrderCreateType = _OrderCreateType;
-                                break;
-                            case (int)Comm.Enum.Platform.MT5:
-                                _MT5._OrderCreateType = _OrderCreateType;
-                                break;
-                        }
-                        string AutoLockTradeSide = "";
-                        switch (tradeType)
-                        {
-                            case 1:
-                                AutoLockTradeSide = "SELL";
-                                break;
-                            case 2:
-                                AutoLockTradeSide = "BUY";
-                                break;
-                            case 3:
-                                //独立锁单平仓只能是单边操作，所以出现买多的时候就直接平多单，对应主窗口平空单
-                                AutoLockTradeSide = "SELL_CLOSE";
-                                break;
-                            case 4:
-                                //独立锁单平仓只能是单边操作，所以出现买空的时候就直接平空单，对应主窗口平多单
-                                AutoLockTradeSide = "BUY_CLOSE";
-                                break;
-                        }
-                        executedFlag = AutoLockProcess(AutoLockTradeSide);
-                        //发送订单完成后，停止自动交易，待订单更新后修改自动交易标识
-                        if (!executedFlag)
-                        {
-                            isOrderCompleted = true;
-                            _Log.LogInfo("无独立锁单生成");
-                        }
+                        CancelCheckForSelected();
                     }
-                    else
-                    {
-                        _Log.LogInfo("未选择消息锁单或独立锁单，不执行自动订单操作");
-                        isOrderCompleted = true;
-                    }
-                    //取消勾选，不用停止自动交易
-                    CancelCheck();
-                    _PriceCount = DateTime.Now;
                 }
-                CancelCheckForSelected();
-                isExecuting = false;
+                catch (Exception ex)
+                {
+                    isOrderCompleted = true;
+                    _logger.Error("[平台行情] 跳次分析/下单异常: " + ex.Message + "  " + ex.StackTrace);
+                    _Log.LogInfo("[平台行情] 跳次分析/下单异常: " + ex.Message);
+                }
+                finally
+                {
+                    EndExecuting();
+                }
             }
         }
         /// <summary>
@@ -3020,6 +3473,7 @@ namespace uClient
         /// <param name="e"></param>
         public void frmTrade_FormClosed(object sender, FormClosedEventArgs e)
         {
+            DSDisconnect();
             if (this.bgwMarketQuote.IsBusy)
             {
                 this.bgwMarketQuote.CancelAsync();
@@ -3072,19 +3526,11 @@ namespace uClient
             {
                 if (buttonDSConnect.Text.Equals("数据源连接"))
                 {
-                    _IsDSConnectFlag = DSConnection();
-                    if (_IsDSConnectFlag)
-                    {
-                        if (bgwMarketQuote.IsBusy != true)
-                        {
-                            bgwMarketQuote.RunWorkerAsync();
-                        }
-                    }
+                    DSConnection();
                 }
                 else if (buttonDSConnect.Text.Equals("数据源断开"))
                 {
                     DSDisconnect();
-                    _IsDSConnectFlag = false;
                 }
             });
         }
@@ -3132,59 +3578,120 @@ namespace uClient
         /// <summary>
         /// 数据源连接标志
         /// </summary>
-        public bool _IsDSConnectFlag = false;
+        public volatile bool _IsDSConnectFlag = false;
+
+        /// <summary>
+        /// 数据源是否真正就绪。子类可增加 EA 心跳等额外条件。
+        /// </summary>
+        protected virtual bool IsDataSourceReady()
+        {
+            return _IsDSConnectFlag;
+        }
+
         /// <summary>
         /// 连接数据源
         /// </summary>
         /// <returns></returns>
         public virtual bool DSConnection()
         {
-            string dsAddress = getDSConnectionAddress();
-
-            _Log.LogInfo(string.Format("连接到{0}服务器：{1}", _Config.DSType, dsAddress));
+            string dsAddress;
             try
             {
-                if (dsAddress == null || dsAddress == "")
-                {
-                    MessageBox.Show(string.Format("{0}服务器地址未配置", _Config.DSType));
-                    return false;
-                }
-                _Subscriber.Options.TcpKeepalive = true;
-                _Subscriber.Options.TcpKeepaliveIdle = new TimeSpan(5, 0, 0);
-                _Subscriber.Options.TcpKeepaliveInterval = new TimeSpan(0, 0, 1);
-                _Subscriber.Connect(dsAddress);
-                _Subscriber.Subscribe("");
-                buttonDSConnect.Text = "数据源断开";
-                buttonDSConnect.BackColor = Color.Green;
-                label_Price_Connect.BackColor = Color.Green;
-                label_DSName.Text = _Config.DSType;
-                label_Price_Connect.Text = "已连接";
-                return true;
+                dsAddress = getDSConnectionAddress();
             }
             catch (Exception ex)
             {
-                _logger.Error(ex.Message + "  " + ex.StackTrace);
-                _Log.LogInfo(string.Format("连接到{0}服务器时错误：{1}", _Config.DSType, ex.Message));
-                label_Price_Connect.BackColor = Color.Red;
-                label_Price_Connect.Text = "连接失败";
+                _logger.Error("[数据源] 获取连接地址失败: " + ex.Message + "  " + ex.StackTrace);
+                _Log.LogInfo("[数据源] 获取连接地址失败: " + ex.Message);
+                return false;
             }
-            return false;
+
+            if (string.IsNullOrWhiteSpace(dsAddress))
+            {
+                MessageBox.Show(string.Format("{0}服务器地址未配置", _Config.DSType));
+                return false;
+            }
+
+            lock (_dsLifecycleLock)
+            {
+                if (bgwMarketQuote.IsBusy)
+                {
+                    if (string.Equals(_dsEndpoint, dsAddress, StringComparison.OrdinalIgnoreCase) &&
+                        !_dsStopRequested)
+                    {
+                        _Log.LogInfo("[数据源] 行情线程已经运行，无需重复连接");
+                        return true;
+                    }
+
+                    _dsStopRequested = true;
+                    if (bgwMarketQuote.WorkerSupportsCancellation)
+                        bgwMarketQuote.CancelAsync();
+                }
+
+                if (!_dsWorkerStopped.Wait(TimeSpan.FromSeconds(5)) || bgwMarketQuote.IsBusy)
+                {
+                    _Log.LogInfo("[数据源] 上一行情线程尚未退出，拒绝重复启动");
+                    return false;
+                }
+
+                _dsEndpoint = dsAddress;
+                _dsStopRequested = false;
+                _dsWorkerStopped.Reset();
+
+                try
+                {
+                    _Log.LogInfo(string.Format("正在启动{0}数据源连接：{1}", _Config.DSType, dsAddress));
+                    bgwMarketQuote.RunWorkerAsync();
+                    _IsDSConnectFlag = false; // 连接成功前不允许启动自动交易。
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    _dsWorkerStopped.Set();
+                    _IsDSConnectFlag = false;
+                    _logger.Error("[数据源] 启动行情线程失败: " + ex.Message + "  " + ex.StackTrace);
+                    _Log.LogInfo("[数据源] 启动行情线程失败: " + ex.Message);
+                    return false;
+                }
+            }
         }
+
         /// <summary>
-        /// 断开数据源
+        /// 请求行情线程退出。当前线程不直接操作 NetMQ socket。
         /// </summary>
         public virtual void DSDisconnect()
         {
-            string dsAddress = getDSConnectionAddress();
+            _Log.LogInfo("[数据源] 请求断开数据源");
+            _dsStopRequested = true;
+            _IsDSConnectFlag = false;
 
-            _Log.LogInfo(string.Format("断开{0}服务器：{1}", _Config.DSType, dsAddress));
-            buttonDSConnect.Text = "数据源连接";
-            buttonDSConnect.BackColor = Color.Red;
-            _Subscriber.Unbind(dsAddress);
-            label_Price_Connect.BackColor = Color.Red;
-            label_Price_Connect.Text = "断开";
-            ClearDSDiff();
-            StopAutoTrade();
+            try
+            {
+                if (bgwMarketQuote.IsBusy && bgwMarketQuote.WorkerSupportsCancellation)
+                    bgwMarketQuote.CancelAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn("[数据源] CancelAsync 异常: " + ex.Message);
+            }
+
+            _dsWorkerStopped.Wait(TimeSpan.FromSeconds(3));
+            try
+            {
+                RenderUI(buttonDSConnect, () =>
+                {
+                    buttonDSConnect.Text = "数据源连接";
+                    buttonDSConnect.BackColor = Color.Red;
+                    label_Price_Connect.BackColor = Color.Red;
+                    label_Price_Connect.Text = "断开";
+                    ClearDSDiff();
+                    StopAutoTrade();
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn("[数据源] 更新断开状态UI失败: " + ex.Message);
+            }
         }
         public void ClearDSDiff()
         {

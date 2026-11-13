@@ -5,7 +5,6 @@ using System.ComponentModel;
 using System.Media;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Test;
 using Order = mtapi.mt5.Order;
 
 namespace uClient.Comm
@@ -97,6 +96,50 @@ namespace uClient.Comm
         public OrderProgress _OrderProgressEventArgs;
 
         public OrderUpdate _OrderUpdateEventArgs;
+        // MT5 callbacks may arrive concurrently; never store them in a single overwrite-only slot.
+        private readonly System.Collections.Concurrent.ConcurrentQueue<OrderUpdate> _pendingOrderUpdates =
+            new System.Collections.Concurrent.ConcurrentQueue<OrderUpdate>();
+        private readonly object _orderWorkerGate = new object();
+        private bool _orderWorkerCompletionAttached;
+
+        public bool TryDequeueOrderUpdate(out OrderUpdate update)
+        {
+            return _pendingOrderUpdates.TryDequeue(out update);
+        }
+
+        private void EnsureOrderWorkerCompletionHandler()
+        {
+            lock (_orderWorkerGate)
+            {
+                if (_BgwOrderUpdate == null || _orderWorkerCompletionAttached) return;
+                _BgwOrderUpdate.RunWorkerCompleted += MT5OrderWorkerCompleted;
+                _orderWorkerCompletionAttached = true;
+            }
+        }
+
+        private void MT5OrderWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            if (e.Error != null)
+                _logger.Error("[MT5][ORDER_WORKER_ERROR] " + e.Error);
+            // DoWork may finish just as another callback arrives: always re-check the queue.
+            ScheduleOrderWorker();
+        }
+
+        private void ScheduleOrderWorker()
+        {
+            lock (_orderWorkerGate)
+            {
+                if (_BgwOrderUpdate == null || _pendingOrderUpdates.IsEmpty || _BgwOrderUpdate.IsBusy)
+                    return;
+                try { _BgwOrderUpdate.RunWorkerAsync(); }
+                catch (InvalidOperationException ex)
+                {
+                    // Another callback may have started the worker; completion handler retries.
+                    _logger.Warn("[MT5][ORDER_WORKER_BUSY] " + ex.Message);
+                }
+            }
+        }
+
 
         /// <summary>
         /// 手工断开连接
@@ -165,6 +208,7 @@ namespace uClient.Comm
             this._Log = log;
             this._BgwBroberQuote = bgwBroberQuote;
             this._BgwOrderUpdate = bgwOrderUpdate;
+            EnsureOrderWorkerCompletionHandler();
             this._GvPositions = gvPositions;
             this._QuotaDisplayPanel = quotaDisplayPanel;
             this._AccountDisplay = accountDisplay;
@@ -226,10 +270,9 @@ namespace uClient.Comm
                 {
                     _QC.OnConnectProgress += OnConnectProgress;
                     _QC.OnQuote += QCOnQuote;
+                    _QC.OnOrderUpdate += OnOrderUpdate;
                     _QC.Connect();
                     _IsManullyDisconnect = false;
-                    //_QC.OnOrderProgress += QCOnOrderProgress;
-                    _QC.OnOrderUpdate += OnOrderUpdate;
                 }
                 else
                 {
@@ -261,47 +304,10 @@ namespace uClient.Comm
             throw new NotImplementedException();
         }
 
+        // Deprecated unsafe demo connector removed (contained embedded credentials).
         public void Connect1()
         {
-            var exam = new Examples();
-            //exam.MarketOrder();
-
-            var api = new MT5API(107448, "!Qf9aac7", "93.90.192.241", 1950);
-            api.OnConnectProgress += OnConnectProgress;
-            api.Connect();
-            Console.WriteLine("Connected");
-            Console.WriteLine("AccountBalance=" + api.Account.Balance);
-            Console.WriteLine("AccountEquity=" + api.AccountEquity);
-            Console.WriteLine("AccountMargin=" + api.AccountMargin);
-            Console.WriteLine("AccountFreeMargin=" + api.AccountFreeMargin);
-            api.OnOrderProgress += QCOnOrderProgress;
-            api.OnOrderUpdate += OnOrderUpdate;
-            Console.WriteLine("================================");
-
-            string symbol = "XAUUSD.";
-            api.Subscribe(symbol);
-            api.OnQuote += QCOnQuote;
-            var quote = api.GetQuote(symbol);
-            Console.WriteLine("quote.ask" + quote.Ask);
-            var positions = api.GetOpenedOrders();
-            foreach (var position in positions)
-            {
-                Console.WriteLine($"Ticket N {position.Ticket}, Lots = {position.Lots}, OrderType = {position.OrderType}");
-                api.OrderCloseAsync(1, position.Ticket, symbol, api.GetQuote(symbol).Bid, position.Lots, OrderType.Buy, 100);
-            }
-
-            api.OrderSendAsync(1, symbol, 0.1, double.NaN, OrderType.Sell, fillPolicy: FillPolicy.Any);
-            Console.WriteLine("===Sell Done=============================");
-            Task.Delay(1000).Wait();
-            positions = api.GetOpenedOrders();
-            long ticket = -1;
-            foreach (var position in positions)
-            {
-                Console.WriteLine($"Ticket N {position.Ticket}, Lots = {position.Lots}, OrderType = {position.OrderType}");
-                ticket = position.Ticket;
-            }
-            api.OrderCloseAsync(1, ticket, symbol, api.GetQuote(symbol).Bid, 0.01, OrderType.Buy, 100);
-            Console.WriteLine("===Close Done=============================");
+            throw new NotSupportedException("Use Connect() with configured account credentials.");
         }
 
         private void QCOnQuote(MT5API api, mtapi.mt5.Quote quote)
@@ -330,13 +336,13 @@ namespace uClient.Comm
         /// <param name="update"></param>
         private void OnOrderUpdate(MT5API sender, OrderUpdate update)
         {
-            _OrderUpdateEventArgs = update;
-            if (_BgwOrderUpdate != null && _BgwOrderUpdate.IsBusy != true)
-            {
-                _BgwOrderUpdate.CancelAsync();
-                _BgwOrderUpdate.RunWorkerAsync();
-            }
+            if (update == null) return;
+            // Ignore late callbacks from a superseded API connection.
+            if (!object.ReferenceEquals(sender, _QC)) return;
+            _pendingOrderUpdates.Enqueue(update);
+            ScheduleOrderWorker();
         }
+
         /// <summary>
         /// 订单过程状态更新
         /// </summary>
@@ -345,13 +351,9 @@ namespace uClient.Comm
         private void QCOnOrderProgress(MT5API api, OrderProgress progress)
         {
             _OrderProgressEventArgs = progress;
-            if (_BgwOrderUpdate.IsBusy != true)
-            {
-                _BgwOrderUpdate.CancelAsync();
-                _BgwOrderUpdate.RunWorkerAsync();
-            }
-
+            // Progress is informational; the order worker only consumes OnOrderUpdate events.
         }
+
         /// <summary>
         /// 连接状态更新
         /// </summary>
@@ -472,14 +474,20 @@ namespace uClient.Comm
         /// <param name="lots"></param>
         public override void OpenBuyOrder(bool _IsAutoOperationFlag, out DateTime _SendTime, decimal lots = 0.1M)
         {
-            double price = _QC.GetQuote(_TradeSymbol).Ask;
+            double price = 0;
             _SendTime = DateTime.Now;
             try
             {
+                _Log.LogInfo("[MT5][OPEN_BUY][GET_QUOTE_BEGIN]");
+                price = _QC.GetQuote(_TradeSymbol).Ask;
+                _Log.LogInfo("[MT5][OPEN_BUY][GET_QUOTE_END] price=" + price);
 
+                _Log.LogInfo("[MT5][OPEN_BUY][GET_REQUEST_ID_BEGIN]");
                 int reqID = _QC.GetRequestId();
+                _Log.LogInfo("[MT5][OPEN_BUY][SEND_BEGIN] requestId=" + reqID);
                 //_QC.OrderSend(_TradeSymbol, (double)lots, price, OrderType.Buy, 0, 0, ulong.Parse(_Broker.TradePara.Slippage.ToString()),null,0);
                 _QC.OrderSendAsync(reqID, _TradeSymbol, (double)lots, price, OrderType.Buy, 0, 0, ulong.Parse(_Broker.TradePara.Slippage.ToString()), fillPolicy: FillPolicy.Any);
+                _Log.LogInfo("[MT5][OPEN_BUY][SEND_RETURNED] requestId=" + reqID);
                 //api.OrderSendAsync(id, "EURUSD.DEMO", 0.01, ask, OrderType.Buy, 0, 0, 100, null, 0, FillPolicy.FillOrKill);
                 //api.OrderSend(symbol, 0.01, api.GetQuote(symbol).Ask, OrderType.Buy, 0, 0, 1000, null, 0);
             }
@@ -489,6 +497,8 @@ namespace uClient.Comm
                 _logger.Error(msg + "  " + ex.StackTrace);
                 _Log.LogTradeRecord(_Account, msg);
                 _Log.LogInfo(ex.Message);
+                if (!_IsAutoOperationFlag) throw;
+                return;
             }
             string message = MessageFormatter.OrderSendMessage(_IsAutoOperationFlag, "BUY");
             if (_IsAutoOperationFlag)
@@ -509,12 +519,18 @@ namespace uClient.Comm
         public override void OpenSellOrder(bool _IsAutoOperationFlag, out DateTime _SendTime, decimal lots = 0.1M)
         {
             _SendTime = DateTime.Now;
-            double price = _QC.GetQuote(_TradeSymbol).Bid;
+            double price = 0;
             try
             {
+                _Log.LogInfo("[MT5][OPEN_SELL][GET_QUOTE_BEGIN]");
+                price = _QC.GetQuote(_TradeSymbol).Bid;
+                _Log.LogInfo("[MT5][OPEN_SELL][GET_QUOTE_END] price=" + price);
                 //_QC.OrderSend(_TradeSymbol, (double)lots, price, OrderType.Sell, 0, 0, ulong.Parse(_Broker.TradePara.Slippage.ToString()), null, 0);
+                _Log.LogInfo("[MT5][OPEN_SELL][GET_REQUEST_ID_BEGIN]");
                 int reqID = _QC.GetRequestId();
+                _Log.LogInfo("[MT5][OPEN_SELL][SEND_BEGIN] requestId=" + reqID);
                 _QC.OrderSendAsync(reqID, _TradeSymbol, (double)lots, price, OrderType.Sell, 0, 0, ulong.Parse(_Broker.TradePara.Slippage.ToString()), fillPolicy: FillPolicy.Any);
+                _Log.LogInfo("[MT5][OPEN_SELL][SEND_RETURNED] requestId=" + reqID);
                 //api.OrderSendAsync(id, "EURUSD.DEMO", 0.01, ask, OrderType.Buy, 0, 0, 100, null, 0, FillPolicy.FillOrKill);
             }
             catch (Exception ex)
@@ -523,6 +539,8 @@ namespace uClient.Comm
                 _logger.Error(msg + "  " + ex.StackTrace);
                 _Log.LogTradeRecord(_Account, msg);
                 _Log.LogInfo(ex.Message);
+                if (!_IsAutoOperationFlag) throw;
+                return;
             }
             string message = MessageFormatter.OrderSendMessage(_IsAutoOperationFlag, "SELL");
             if (_IsAutoOperationFlag)
@@ -550,14 +568,8 @@ namespace uClient.Comm
             double price = order.OrderType == OrderType.Buy ? quote.Bid : quote.Ask;
             try
             {
-                Task.Run(() =>
-                {
-                    int reqID = _QC.GetRequestId();
-                    //_QC.OrderClose(ticket, symbol, price, lots, order.OrderType, ulong.Parse(_Broker.TradePara.Slippage.ToString()));
-                    _QC.OrderCloseAsync(reqID, ticket, symbol, price, lots, order.OrderType, ulong.Parse(_Broker.TradePara.Slippage.ToString()));
-                    //api.OrderCloseAsync(reqID, 2873358, symbol, api.GetQuote(symbol).Bid, 0.04, OrderType.Buy, 100);
-                    //api.OrderClose(item.Ticket, item.Symbol, api.GetQuote(symbol).Bid, item.Lots, item.OrderType, deviation: 1000);
-                });
+                int reqID = _QC.GetRequestId();
+                _QC.OrderCloseAsync(reqID, ticket, symbol, price, lots, order.OrderType, ulong.Parse(_Broker.TradePara.Slippage.ToString()));
             }
             catch (Exception ex)
             {
@@ -566,15 +578,23 @@ namespace uClient.Comm
                 _Log.LogTradeRecord(_Account, msg);
                 _Log.LogInfo(ex.Message);
             }
+            // 修复：平仓动作根据订单类型正确输出平多/平空日志，避免显示为手动买多
             string tradeType = order.OrderType == OrderType.Buy ? "BUY_CLOSE" : "SELL_CLOSE";
-            string message = MessageFormatter.OrderSendMessage(_IsAutoOperationFlag, tradeType);
-            if (_IsAutoOperationFlag)
+            string actionName = _IsAutoOperationFlag ? "自动买平" : "手动买平";
+            if (order.OrderType == OrderType.Sell)
             {
-                _Log.LogTradeRecord(_Account, string.Format(message, _SendTime.ToString("HH:mm:ss.fff"), price, lots, _DSQuote.BidDiff[0], _QC.Account.Balance.ToString()));
+                actionName = _IsAutoOperationFlag ? "自动卖平" : "手动卖平";
+            }
+
+            if (_IsAutoOperationFlag && _DSQuote != null && _DSQuote.BidDiff != null && _DSQuote.BidDiff.Count > 0)
+            {
+                _Log.LogTradeRecord(_Account, string.Format("[{0}][{1}][发送]报价:{2} 手数:{3} 差值:{4} 余额:{5}",
+                    _SendTime.ToString("HH:mm:ss.fff"), actionName, price, lots, _DSQuote.BidDiff[0], _QC.Account.Balance.ToString()));
             }
             else
             {
-                _Log.LogTradeRecord(_Account, string.Format(message, _SendTime.ToString("HH:mm:ss.fff"), price, lots, _QC.Account.Balance.ToString()));
+                _Log.LogTradeRecord(_Account, string.Format("[{0}][{1}][发送]报价:{2} 手数:{3} 余额:{4}",
+                    _SendTime.ToString("HH:mm:ss.fff"), actionName, price, lots, _QC.Account.Balance.ToString()));
             }
         }
 
@@ -599,14 +619,8 @@ namespace uClient.Comm
             double price = order.OrderType == OrderType.Buy ? quote.Bid : quote.Ask;
             try
             {
-                Task.Run(() =>
-                {
-                    int reqID = _QC.GetRequestId();
-                    //_QC.OrderClose(ticket, symbol, price, lots, order.OrderType, ulong.Parse(_Broker.TradePara.Slippage.ToString()));
-                    _QC.OrderCloseAsync(reqID, ticket, symbol, price, lots, order.OrderType, ulong.Parse(_Broker.TradePara.Slippage.ToString()));
-                    //api.OrderCloseAsync(reqID, 2873358, symbol, api.GetQuote(symbol).Bid, 0.04, OrderType.Buy, 100);
-                    //api.OrderClose(item.Ticket, item.Symbol, api.GetQuote(symbol).Bid, item.Lots, item.OrderType, deviation: 1000);
-                });
+                int reqID = _QC.GetRequestId();
+                _QC.OrderCloseAsync(reqID, ticket, symbol, price, lots, order.OrderType, ulong.Parse(_Broker.TradePara.Slippage.ToString()));
             }
             catch (Exception ex)
             {
@@ -615,15 +629,22 @@ namespace uClient.Comm
                 _Log.LogTradeRecord(_Account, msg);
                 _Log.LogInfo(ex.Message);
             }
-            string tradeType = order.OrderType == OrderType.Buy ? "BUY_CLOSE" : "SELL_CLOSE";
-            string message = MessageFormatter.OrderSendMessage(_IsAutoOperationFlag, tradeType);
-            if (_IsAutoOperationFlag)
+            // 修复：平仓动作根据订单类型正确输出平多/平空日志，避免显示为手动买多
+            string actionName = _IsAutoOperationFlag ? "自动买平" : "手动买平";
+            if (order.OrderType == OrderType.Sell)
             {
-                _Log.LogTradeRecord(_Account, string.Format(message, _SendTime.ToString("HH:mm:ss.fff"), price, lots, _DSQuote.BidDiff[0], _QC.Account.Balance.ToString()));
+                actionName = _IsAutoOperationFlag ? "自动卖平" : "手动卖平";
+            }
+
+            if (_IsAutoOperationFlag && _DSQuote != null && _DSQuote.BidDiff != null && _DSQuote.BidDiff.Count > 0)
+            {
+                _Log.LogTradeRecord(_Account, string.Format("[{0}][{1}][发送]报价:{2} 手数:{3} 差值:{4} 余额:{5}",
+                    _SendTime.ToString("HH:mm:ss.fff"), actionName, price, lots, _DSQuote.BidDiff[0], _QC.Account.Balance.ToString()));
             }
             else
             {
-                _Log.LogTradeRecord(_Account, string.Format(message, _SendTime.ToString("HH:mm:ss.fff"), price, lots, _QC.Account.Balance.ToString()));
+                _Log.LogTradeRecord(_Account, string.Format("[{0}][{1}][发送]报价:{2} 手数:{3} 余额:{4}",
+                    _SendTime.ToString("HH:mm:ss.fff"), actionName, price, lots, _QC.Account.Balance.ToString()));
             }
         }
 
@@ -639,12 +660,15 @@ namespace uClient.Comm
         /// <param name="_LockOrderId"></param>
         public override void OrderUpdate(bool _IsAutoOperationFlag, DateTime _SendTime, string _LockOrderId)
         {
-            executedFlag = false;
             SoundPlayer player;
             DateTime _ReceiveTime = DateTime.Now;
-            Order order = _OrderUpdateEventArgs.Order;
+            if (_OrderUpdateEventArgs == null || _OrderUpdateEventArgs.Order == null) return;
+            OrderUpdate currentUpdate = _OrderUpdateEventArgs;
+            Order order = currentUpdate.Order;
+            if (currentUpdate.Type == UpdateType.MarketOpen || currentUpdate.Type == UpdateType.MarketClose)
+                executedFlag = false;
             long diffTimeDuration = Convert.ToInt32((_ReceiveTime - _SendTime).TotalMilliseconds);
-            if (_OrderUpdateEventArgs.Type == UpdateType.MarketOpen)
+            if (currentUpdate.Type == UpdateType.MarketOpen)
             {
                 string tradeType = "";
                 if (order.OrderType == OrderType.Buy)
@@ -668,7 +692,7 @@ namespace uClient.Comm
                         //orderTypeDetail:openPrice:closePrice:profit
                         string[] split = _EA2_TradeRecord.Split(new[] { ':' }, StringSplitOptions.RemoveEmptyEntries);
 
-                        DBHelper.saveTradeLogMT4("MT5", _Broker.BrokerCode, _Broker.BrokerName, _Account.UserCode, _IsAutoOperationFlag ? "Y" : "N", order.Ticket.ToString(), _EA2_TradeRecord, tradeType, split[0], order.Lots, order.OpenPrice, Math.Round(Convert.ToDouble(split[2]), 2), 0, 0, Math.Round(_QC.Account.Balance, 2), _QC.AccountEquity, _QC.AccountMargin, _QC.AccountFreeMargin, _LockOrderId);
+                        DBHelper.saveTradeLogMT4("MT5", _Broker.BrokerCode, _Broker.BrokerName, _Account.UserCode, _IsAutoOperationFlag ? "Y" : "N", order.Ticket.ToString(), _EA2_TradeRecord, tradeType, split[0], order.Lots, order.OpenPrice, 0, 0, 0, Math.Round(_QC.Account.Balance, 2), _QC.AccountEquity, _QC.AccountMargin, _QC.AccountFreeMargin, _LockOrderId);
                         _Log.LogInfo("保存交易日志完成");
                         //order_type:BUY_CLOSE,volume:0.3,open_price:2155.28,close_price:2158.79
                         string content = "order_type:" + tradeType + ",volume:" + order.Lots + ",open_price:" + order.OpenPrice + ",close_price:";
@@ -689,7 +713,7 @@ namespace uClient.Comm
                     }
                 });
             }
-            else if (_OrderUpdateEventArgs.Type == UpdateType.MarketClose)
+            else if (currentUpdate.Type == UpdateType.MarketClose)
             {
                 string tradeType1 = order.OrderType == OrderType.Buy ? "BUY_CLOSE" : "SELL_CLOSE";
                 string msg1 = string.Format(MessageFormatter.OrderReceiveMessage(_IsAutoOperationFlag, tradeType1), _ReceiveTime.ToString("HH:mm:ss.fff"), order.ClosePrice, order.CloseLots, diffTimeDuration, _QC.Account.Balance.ToString());
@@ -732,7 +756,13 @@ namespace uClient.Comm
             }
             else
             {
-                _Log.LogInfo($"_OrderUpdateEventArgs.Type{_OrderUpdateEventArgs.Type}不能识别");
+                // 忽略 PendingOpen 等中间状态回报，防止报错或中断
+                string typeStr = currentUpdate.Type.ToString();
+                if (string.Equals(typeStr, "PendingOpen", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+                _Log.LogInfo($"currentUpdate.Type{currentUpdate.Type}不能识别");
             }
         }
 
